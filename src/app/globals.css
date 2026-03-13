@@ -1,0 +1,202 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ============================================ */
+/* GRAHVANI ADMIN — DARK COSMIC DESIGN SYSTEM  */
+/* ============================================ */
+
+:root {
+  /* Backgrounds */
+  --admin-bg-deep: #06080f;
+  --admin-bg-primary: #0c1220;
+  --admin-bg-card: #111a2e;
+  --admin-bg-elevated: #162040;
+  --admin-bg-input: #0f1729;
+
+  /* Borders */
+  --admin-border: #1e2d4a;
+  --admin-border-gold: rgba(212, 168, 67, 0.2);
+  --admin-border-focus: rgba(212, 168, 67, 0.5);
+
+  /* Gold Accents (Grahvani Brand) */
+  --admin-accent: #d4a843;
+  --admin-accent-hover: #e6c060;
+  --admin-accent-muted: rgba(212, 168, 67, 0.15);
+
+  /* Text */
+  --admin-text-primary: #e8ecf4;
+  --admin-text-secondary: #8892a8;
+  --admin-text-muted: #5a6478;
+
+  /* Status Colors */
+  --admin-success: #10b981;
+  --admin-warning: #f59e0b;
+  --admin-danger: #ef4444;
+  --admin-info: #3b82f6;
+
+  /* Font */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Outfit', 'Inter', sans-serif;
+}
+
+@theme {
+  --color-admin-deep: var(--admin-bg-deep);
+  --color-admin-primary: var(--admin-bg-primary);
+  --color-admin-card: var(--admin-bg-card);
+  --color-admin-elevated: var(--admin-bg-elevated);
+  --color-admin-input: var(--admin-bg-input);
+  --color-admin-border: var(--admin-border);
+  --color-admin-border-gold: var(--admin-border-gold);
+  --color-admin-accent: var(--admin-accent);
+  --color-admin-accent-hover: var(--admin-accent-hover);
+  --color-admin-accent-muted: var(--admin-accent-muted);
+  --color-admin-text: var(--admin-text-primary);
+  --color-admin-text-secondary: var(--admin-text-secondary);
+  --color-admin-text-muted: var(--admin-text-muted);
+  --color-admin-success: var(--admin-success);
+  --color-admin-warning: var(--admin-warning);
+  --color-admin-danger: var(--admin-danger);
+  --color-admin-info: var(--admin-info);
+}
+
+body {
+  background: var(--admin-bg-deep);
+  color: var(--admin-text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Glassmorphism Card */
+.glass-card {
+  background: rgba(17, 26, 46, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+}
+
+.glass-card:hover {
+  border-color: var(--admin-border-gold);
+}
+
+/* Gold Gradient Button */
+.btn-gold {
+  background: linear-gradient(135deg, #d4a843 0%, #b8922f 100%);
+  color: #0c1220;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, #e6c060 0%, #d4a843 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(212, 168, 67, 0.3);
+}
+
+/* Subtle Glow Effect */
+.gold-glow {
+  box-shadow: 0 0 20px rgba(212, 168, 67, 0.1),
+              inset 0 1px 0 rgba(212, 168, 67, 0.1);
+}
+
+/* Sidebar Active Link */
+.sidebar-active {
+  background: linear-gradient(90deg, rgba(212, 168, 67, 0.15) 0%, transparent 100%);
+  border-left: 3px solid var(--admin-accent);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--admin-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--admin-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--admin-text-muted);
+}
+
+/* Animation Helpers */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-count-up {
+  animation: countUp 0.6s ease-out;
+}
+
+/* KPI Card Trend Arrow */
+.trend-up { color: var(--admin-success); }
+.trend-down { color: var(--admin-danger); }
+
+/* Status Badge Styles */
+.badge-active { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.badge-trialing { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.badge-expired { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+.badge-cancelled { background: rgba(156, 163, 175, 0.15); color: #9ca3af; }
+
+/* Table Row Hover */
+.table-row-hover:hover {
+  background: rgba(22, 32, 64, 0.6);
+}
+
+/* Slide-in from right (for Drawers) */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Thin scrollbar utility */
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--admin-border); border-radius: 2px; }
+
+/* Reusable Form Utilities */
+.input-field {
+  padding: 10px 14px;
+  background: var(--admin-bg-input);
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  color: var(--admin-text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input-field:focus {
+  border-color: var(--admin-accent);
+}
+.label-field {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
