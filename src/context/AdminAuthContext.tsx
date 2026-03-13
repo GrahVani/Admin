@@ -10,6 +10,13 @@ interface AdminUser {
   name: string;
   role: string;
   avatarUrl?: string;
+  displayName?: string;
+  phone?: string;
+  bio?: string;
+  location?: string;
+  isVerified?: boolean;
+  lastActiveAt?: string;
+  createdAt?: string;
 }
 
 interface AdminAuthContextType {
