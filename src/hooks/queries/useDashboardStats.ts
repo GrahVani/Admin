@@ -8,7 +8,7 @@ export function useDashboardStats() {
     queryKey: ["dashboard-stats"],
     queryFn: () => adminApiFetch("/api/v1/admin/dashboard/stats"),
     enabled: isAuthenticated,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     select: (res) => res?.data,
   });
 }
@@ -22,3 +22,7 @@ export function useDashboardGrowth(days = 30) {
     select: (res) => res?.data ?? [],
   });
 }
+
+// Re-export from useAnalytics for convenience
+export { useAnalytics, useAnalyticsSummary, useAnalyticsRealtime } from "./useAnalytics";
+export type { AnalyticsData, AnalyticsSummary } from "./useAnalytics";

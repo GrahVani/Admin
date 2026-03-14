@@ -5,15 +5,20 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export async function adminApiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  responseType: "json" | "text" | "blob" = "json"
 ): Promise<T> {
   const { accessToken, refreshToken, setTokens, clearTokens } =
     useAdminAuthStore.getState();
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
+
+  // Only set Content-Type if not FormData and not explicitly overridden
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (accessToken) {
     headers["Authorization"] = `Bearer ${accessToken}`;
@@ -65,5 +70,32 @@ export async function adminApiFetch<T = any>(
     );
   }
 
-  return response.json();
+  // Handle different response types
+  switch (responseType) {
+    case "text":
+      return response.text() as Promise<T>;
+    case "blob":
+      return response.blob() as Promise<T>;
+    case "json":
+    default:
+      return response.json();
+  }
+}
+
+// Helper for CSV exports
+export async function adminApiFetchCSV(endpoint: string): Promise<Blob> {
+  return adminApiFetch<Blob>(endpoint, {}, "blob");
+}
+
+// Helper for text responses
+export async function adminApiFetchText(endpoint: string): Promise<string> {
+  return adminApiFetch<string>(endpoint, {}, "text");
+}
+
+// Helper for POST requests
+export async function adminApiFetchPost<T = any>(endpoint: string, body: any): Promise<T> {
+  return adminApiFetch<T>(endpoint, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
