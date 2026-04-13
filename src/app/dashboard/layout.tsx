@@ -19,6 +19,7 @@ export default function DashboardLayout({
   const { isAuthenticated, isLoading } = useAdminAuth();
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   if (isLoading) {
     return (
@@ -44,23 +45,32 @@ export default function DashboardLayout({
     return null;
   }
 
+  // Sidebar widths: expanded = 256px (64), collapsed = 72px (18)
+  const sidebarWidth = sidebarCollapsed ? 72 : 256;
+
   return (
     <div className="min-h-screen flex bg-admin-deep">
       {/* Desktop Sidebar */}
-      {!isMobile && <AdminSidebar />}
+      {!isMobile && (
+        <AdminSidebar 
+          collapsed={sidebarCollapsed} 
+          onCollapseChange={setSidebarCollapsed} 
+        />
+      )}
 
       {/* Main Content */}
       <motion.div
-        className="flex-1 flex flex-col min-h-screen transition-all duration-300"
+        className="flex-1 flex flex-col min-h-screen"
         initial={false}
         animate={{
-          marginLeft: isMobile ? 0 : 256,
+          marginLeft: isMobile ? 0 : sidebarWidth,
         }}
+        transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
       >
         <AdminTopBar onMenuClick={() => setMobileMenuOpen(true)} />
         
-        <main className="flex-1 p-3 sm:p-4 lg:p-5 xl:p-6 overflow-y-auto">
-          <div className="max-w-[1920px] mx-auto">
+        <main className="flex-1 p-2 sm:p-3 lg:p-4 overflow-y-auto">
+          <div className="w-full">
             <PageTransition>
               {children}
             </PageTransition>

@@ -3,16 +3,20 @@
 import React, { useState, useMemo } from "react";
 import { useAdminClients, useClientStats } from "@/hooks/queries/useAdminClients";
 import { useAdminUsers } from "@/hooks/queries/useAdminUsers";
+import { useClientTrends } from "@/hooks/queries/useDashboardTrends";
 import { useQuery } from "@tanstack/react-query";
 import { adminApiFetch } from "@/lib/api";
 import { 
-  Search, Users, TrendingUp, MapPin, Mail, Phone,
+  Search, Users, TrendingUp, TrendingDown, MapPin, Mail, Phone,
   ChevronDown, ChevronLeft, ChevronRight, Download, X, 
   User, Clock, Star, FileText, Activity,
-  Eye, Filter, Heart, UserCircle, Info
+  Eye, Filter, Heart, UserCircle, Info, RefreshCw,
+  Calendar, Globe
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { Button } from "@/components/ui/Button";
 import { format, formatDistanceToNow } from "date-fns";
 
 // Types
@@ -41,36 +45,78 @@ interface Client {
   chartsVersion?: number;
 }
 
-// Statistics Cards
+// Dynamic Statistics Cards
 function StatsCards({ stats }: { stats: any }) {
-  const cards = [
-    { label: "Total Clients", value: stats?.totalClients || 0, icon: Users, color: "blue", trend: "+12%" },
-    { label: "New This Month", value: stats?.newClientsThisMonth || 0, icon: TrendingUp, color: "green", trend: "+8%" },
-    { label: "Charts Generated", value: "—", icon: FileText, color: "amber" },
-    { label: "Active Astrologers", value: "—", icon: Activity, color: "purple" },
-  ];
+  const { total, newThisMonth, isLoading } = useClientTrends(7);
+
+  const cards = useMemo(() => [
+    { 
+      label: "Total Clients", 
+      value: stats?.totalClients || 0, 
+      icon: Users, 
+      color: "blue", 
+      trend: total,
+      tooltip: "Total clients across all astrologers"
+    },
+    { 
+      label: "New This Month", 
+      value: stats?.newClientsThisMonth || 0, 
+      icon: TrendingUp, 
+      color: "green", 
+      trend: newThisMonth,
+      tooltip: "Clients added this month"
+    },
+    { 
+      label: "Charts Generated", 
+      value: stats?.chartsGenerated || "—", 
+      icon: FileText, 
+      color: "amber",
+      tooltip: "Total birth charts generated"
+    },
+    { 
+      label: "Active Astrologers", 
+      value: stats?.activeAstrologers || "—", 
+      icon: Activity, 
+      color: "purple",
+      tooltip: "Astrologers with client activity"
+    },
+  ], [stats, total, newThisMonth]);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {cards.map((card, i) => (
-        <motion.div 
-          key={card.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05 }}
-          className="glass-card p-4"
-        >
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${
-            card.color === "blue" ? "bg-blue-500/10 text-blue-400" :
-            card.color === "green" ? "bg-emerald-500/10 text-emerald-400" :
-            card.color === "amber" ? "bg-amber-500/10 text-amber-400" :
-            "bg-violet-500/10 text-violet-400"
-          }`}>
-            <card.icon className="w-5 h-5" />
-          </div>
-          <p className="text-2xl font-bold text-slate-100">{card.value}</p>
-          <p className="text-xs text-slate-500">{card.label}</p>
-        </motion.div>
+        <Tooltip key={card.label} content={card.tooltip} position="top">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="glass-card p-4 cursor-help h-full hover:border-slate-600/50 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${
+                card.color === "blue" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                card.color === "green" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                card.color === "amber" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                "bg-violet-500/10 text-violet-400 border-violet-500/20"
+              }`}>
+                <card.icon className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-xl font-bold text-slate-100">{card.value}</p>
+                  {!isLoading && card.trend && card.trend.trendDirection !== "neutral" && (
+                    <span className={`text-xs font-medium ${
+                      card.trend.trendDirection === "up" ? "text-emerald-400" : "text-rose-400"
+                    }`}>
+                      {card.trend.trendDirection === "up" ? "+" : "-"}{card.trend.trend}%
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 truncate">{card.label}</p>
+              </div>
+            </div>
+          </motion.div>
+        </Tooltip>
       ))}
     </div>
   );
@@ -78,21 +124,43 @@ function StatsCards({ stats }: { stats: any }) {
 
 // Gender Badge
 function GenderBadge({ gender }: { gender?: string }) {
-  const config: Record<string, { icon: any; color: string; label: string }> = {
-    male: { icon: UserCircle, color: "text-blue-400 bg-blue-500/10", label: "Male" },
-    female: { icon: Heart, color: "text-pink-400 bg-pink-500/10", label: "Female" },
-    other: { icon: User, color: "text-violet-400 bg-violet-500/10", label: "Other" },
-    prefer_not_to_say: { icon: User, color: "text-slate-400 bg-slate-500/10", label: "Not Specified" },
+  const config: Record<string, { icon: any; color: string; label: string; tooltip: string }> = {
+    male: { 
+      icon: UserCircle, 
+      color: "text-blue-400 bg-blue-500/10", 
+      label: "Male",
+      tooltip: "Male client"
+    },
+    female: { 
+      icon: Heart, 
+      color: "text-pink-400 bg-pink-500/10", 
+      label: "Female",
+      tooltip: "Female client"
+    },
+    other: { 
+      icon: User, 
+      color: "text-violet-400 bg-violet-500/10", 
+      label: "Other",
+      tooltip: "Other gender identity"
+    },
+    prefer_not_to_say: { 
+      icon: User, 
+      color: "text-slate-400 bg-slate-500/10", 
+      label: "Not Specified",
+      tooltip: "Gender not specified"
+    },
   };
   
   const c = config[gender || "prefer_not_to_say"] || config.prefer_not_to_say;
   const Icon = c.icon;
   
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${c.color}`}>
-      <Icon className="w-3.5 h-3.5" />
-      {c.label}
-    </span>
+    <Tooltip content={c.tooltip} position="top">
+      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${c.color} cursor-help`}>
+        <Icon className="w-3.5 h-3.5" />
+        {c.label}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -154,9 +222,11 @@ function ClientDetailDrawer({ clientId, onClose }: { clientId: string; onClose: 
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400">
-            <X className="w-5 h-5" />
-          </button>
+          <Tooltip content="Close" position="bottom">
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400">
+              <X className="w-5 h-5" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* Tabs */}
@@ -187,25 +257,31 @@ function ClientDetailDrawer({ clientId, onClose }: { clientId: string; onClose: 
                 Birth Details
               </h3>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Date of Birth</p>
-                  <p className="text-sm text-slate-300">
-                    {client.birthDate ? format(new Date(client.birthDate), "MMMM d, yyyy") : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Time of Birth</p>
-                  <p className="text-sm text-slate-300">
-                    {client.birthTime || "—"}
-                  </p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-slate-500 mb-1">Place of Birth</p>
-                  <p className="text-sm text-slate-300 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" />
-                    {client.birthPlace || "—"}
-                  </p>
-                </div>
+                <Tooltip content="Date of birth for chart calculations" position="top">
+                  <div className="cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Date of Birth</p>
+                    <p className="text-sm text-slate-300">
+                      {client.birthDate ? format(new Date(client.birthDate), "MMMM d, yyyy") : "—"}
+                    </p>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Exact time for accurate chart" position="top">
+                  <div className="cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Time of Birth</p>
+                    <p className="text-sm text-slate-300">
+                      {client.birthTime || "—"}
+                    </p>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Birth location coordinates" position="top">
+                  <div className="col-span-2 cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Place of Birth</p>
+                    <p className="text-sm text-slate-300 flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" />
+                      {client.birthPlace || "—"}
+                    </p>
+                  </div>
+                </Tooltip>
               </div>
             </div>
 
@@ -247,9 +323,11 @@ function ClientDetailDrawer({ clientId, onClose }: { clientId: string; onClose: 
               </h3>
               {astrologer ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-sm font-bold text-amber-400">
-                    {(astrologer.name || astrologer.email)[0].toUpperCase()}
-                  </div>
+                  <Tooltip content={astrologer.email} position="top">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-sm font-bold text-amber-400 cursor-help">
+                      {(astrologer.name || astrologer.email)[0].toUpperCase()}
+                    </div>
+                  </Tooltip>
                   <div>
                     <p className="font-medium text-slate-200">{astrologer.name || astrologer.email}</p>
                     <p className="text-xs text-slate-500">{astrologer.email}</p>
@@ -273,20 +351,17 @@ function ClientDetailDrawer({ clientId, onClose }: { clientId: string; onClose: 
           </>
         )}
 
-
-
         {activeTab === "history" && (
           <div className="text-center py-12">
             <Clock className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-500">Activity history will be displayed here</p>
+            <p className="text-slate-500 mb-2">Activity History</p>
+            <p className="text-xs text-slate-600">Client activity tracking will be available in the next update</p>
           </div>
         )}
       </div>
     </motion.div>
   );
 }
-
-
 
 // Main Page
 export default function ClientsPage() {
@@ -295,8 +370,9 @@ export default function ClientsPage() {
   const [astrologerId, setAstrologerId] = useState("");
   const [page, setPage] = useState(1);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
-  const { data, isLoading } = useAdminClients({ page, search });
+  const { data, isLoading, refetch, isFetching } = useAdminClients({ page, search });
   const { data: stats } = useClientStats();
   const { data: astrologersData } = useAdminUsers({ role: "user", limit: 100 });
   
@@ -315,25 +391,30 @@ export default function ClientsPage() {
 
   // Export to CSV
   const handleExport = () => {
-    const csv = [
-      ["Name", "Email", "Gender", "Birth Date", "Birth Place", "Phone", "Created"].join(","),
-      ...filteredClients.map((c: Client) => [
-        c.fullName || `${c.firstName || ""} ${c.lastName || ""}`.trim(),
-        c.email || "",
-        c.gender || "",
-        c.birthDate || "",
-        c.birthPlace || "",
-        c.phonePrimary || "",
-        new Date(c.createdAt).toLocaleDateString()
-      ].join(","))
-    ].join("\n");
-    
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `clients-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    a.click();
+    setIsExporting(true);
+    try {
+      const csv = [
+        ["Name", "Email", "Gender", "Birth Date", "Birth Place", "Phone", "Created"].join(","),
+        ...filteredClients.map((c: Client) => [
+          c.fullName || `${c.firstName || ""} ${c.lastName || ""}`.trim(),
+          c.email || "",
+          c.gender || "",
+          c.birthDate || "",
+          c.birthPlace || "",
+          c.phonePrimary || "",
+          new Date(c.createdAt).toLocaleDateString()
+        ].join(","))
+      ].join("\n");
+      
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `clients-${format(new Date(), "yyyy-MM-dd")}.csv`;
+      a.click();
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -360,41 +441,59 @@ export default function ClientsPage() {
         </div>
         
         <div className="flex gap-2">
-          <div className="relative">
-            <select 
-              value={gender} 
-              onChange={(e) => { setGender(e.target.value); setPage(1); }}
-              className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/50 cursor-pointer min-w-[140px]"
-            >
-              <option value="all">All Genders</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          </div>
+          <Tooltip content="Filter by gender" position="bottom">
+            <div className="relative">
+              <select 
+                value={gender} 
+                onChange={(e) => { setGender(e.target.value); setPage(1); }}
+                className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/50 cursor-pointer min-w-[140px]"
+              >
+                <option value="all">All Genders</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </div>
+          </Tooltip>
 
-          <div className="relative">
-            <select 
-              value={astrologerId} 
-              onChange={(e) => { setAstrologerId(e.target.value); setPage(1); }}
-              className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/50 cursor-pointer min-w-[160px]"
-            >
-              <option value="">All Astrologers</option>
-              {astrologers.map((a: any) => (
-                <option key={a.id} value={a.id}>{a.name || a.email}</option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          </div>
+          <Tooltip content="Filter by astrologer" position="bottom">
+            <div className="relative">
+              <select 
+                value={astrologerId} 
+                onChange={(e) => { setAstrologerId(e.target.value); setPage(1); }}
+                className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/50 cursor-pointer min-w-[160px]"
+              >
+                <option value="">All Astrologers</option>
+                {astrologers.map((a: any) => (
+                  <option key={a.id} value={a.id}>{a.name || a.email}</option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </div>
+          </Tooltip>
 
-          <button 
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 hover:bg-slate-700 text-sm text-slate-300 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+          <Tooltip content="Export to CSV" position="bottom">
+            <Button
+              onClick={handleExport}
+              isLoading={isExporting}
+              variant="secondary"
+              leftIcon={Download}
+            >
+              Export
+            </Button>
+          </Tooltip>
+
+          <Tooltip content="Refresh data" position="bottom">
+            <Button
+              variant="ghost"
+              onClick={() => refetch()}
+              isLoading={isFetching}
+              leftIcon={RefreshCw}
+            >
+              Refresh
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -435,9 +534,11 @@ export default function ClientsPage() {
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-sm font-bold text-emerald-400 border border-emerald-500/20">
-                          {(client.fullName || client.firstName || "?")[0].toUpperCase()}
-                        </div>
+                        <Tooltip content={client.email || "No email"} position="top">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-sm font-bold text-emerald-400 border border-emerald-500/20 cursor-help">
+                            {(client.fullName || client.firstName || "?")[0].toUpperCase()}
+                          </div>
+                        </Tooltip>
                         <div>
                           <p className="font-medium text-slate-200">
                             {client.fullName || `${client.firstName || ""} ${client.lastName || ""}`.trim() || "—"}
@@ -452,33 +553,39 @@ export default function ClientsPage() {
                       <GenderBadge gender={client.gender} />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm text-slate-300">
-                        {client.birthDate && (
-                          <p>{format(new Date(client.birthDate), "MMM d, yyyy")}</p>
-                        )}
-                        {client.birthPlace && (
-                          <p className="text-xs text-slate-500">{client.birthPlace}</p>
-                        )}
-                      </div>
+                      <Tooltip content={client.birthPlace || "No birth place specified"} position="top">
+                        <div className="text-sm text-slate-300 cursor-help">
+                          {client.birthDate && (
+                            <p>{format(new Date(client.birthDate), "MMM d, yyyy")}</p>
+                          )}
+                          {client.birthPlace && (
+                            <p className="text-xs text-slate-500 truncate max-w-[150px]">{client.birthPlace}</p>
+                          )}
+                        </div>
+                      </Tooltip>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm text-slate-300">
-                        {client.email && <p>{client.email}</p>}
-                        {client.phonePrimary && (
-                          <p className="text-xs text-slate-500">{client.phonePrimary}</p>
-                        )}
-                      </div>
+                      <Tooltip content={client.phonePrimary || "No phone number"} position="top">
+                        <div className="text-sm text-slate-300 cursor-help">
+                          {client.email && <p className="truncate max-w-[150px]">{client.email}</p>}
+                          {client.phonePrimary && (
+                            <p className="text-xs text-slate-500">{client.phonePrimary}</p>
+                          )}
+                        </div>
+                      </Tooltip>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-400">
                       {format(new Date(client.createdAt), "MMM d, yyyy")}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button 
-                        onClick={() => setSelectedClientId(client.id)}
-                        className="text-sm text-emerald-400 hover:text-emerald-300 font-medium"
-                      >
-                        View →
-                      </button>
+                      <Tooltip content="View client details" position="left">
+                        <button 
+                          onClick={() => setSelectedClientId(client.id)}
+                          className="text-sm text-emerald-400 hover:text-emerald-300 font-medium"
+                        >
+                          View →
+                        </button>
+                      </Tooltip>
                     </td>
                   </tr>
                 ))
@@ -494,23 +601,27 @@ export default function ClientsPage() {
               Showing {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={pagination.page === 1}
-                className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+              <Tooltip content="Previous page" position="top">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={pagination.page === 1}
+                  className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </Tooltip>
               <span className="text-sm text-slate-400">
                 Page {pagination.page} of {pagination.totalPages}
               </span>
-              <button
-                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-                disabled={pagination.page === pagination.totalPages}
-                className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <Tooltip content="Next page" position="top">
+                <button
+                  onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                  disabled={pagination.page === pagination.totalPages}
+                  className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </Tooltip>
             </div>
           </div>
         )}

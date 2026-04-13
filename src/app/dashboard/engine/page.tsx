@@ -8,16 +8,23 @@ import {
   Database, Server, Activity, Clock, Play,
   ChevronDown, ChevronUp, ExternalLink, Zap, TrendingUp, 
   TrendingDown, Wifi, WifiOff, Bell, History, BarChart3,
-  Terminal, X, ArrowUpRight, Minus, Maximize2
+  Terminal, X, ArrowUpRight, Minus, Maximize2,
+  Info, HelpCircle, Lightbulb, Cpu, Globe,
+  Shield, Gauge, Layers
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   LineChart, Line, AreaChart, Area, XAxis, YAxis, 
-  CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar
+  CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import { formatDistanceToNow, format, subHours } from "date-fns";
 
-// Types
+import { Tooltip, TooltipContent, TooltipIndicator, FieldLabel } from "@/components/ui/Tooltip";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
+
+// Types remain the same...
 interface ServiceHealth {
   name: string;
   status: "online" | "offline" | "degraded";
@@ -71,32 +78,59 @@ interface HealthData {
   };
 }
 
-// Status configs
+// Status configs with tooltips
 const statusConfig = {
   online: { 
     color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20",
-    icon: CheckCircle, label: "Online", barColor: "bg-emerald-500"
+    icon: CheckCircle, label: "Online", barColor: "bg-emerald-500",
+    tooltip: "Service is operating normally with acceptable response times"
   },
   degraded: { 
     color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20",
-    icon: AlertTriangle, label: "Degraded", barColor: "bg-amber-500"
+    icon: AlertTriangle, label: "Degraded", barColor: "bg-amber-500",
+    tooltip: "Service is experiencing issues but remains operational"
   },
   offline: { 
     color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20",
-    icon: XCircle, label: "Offline", barColor: "bg-rose-500"
+    icon: XCircle, label: "Offline", barColor: "bg-rose-500",
+    tooltip: "Service is completely unavailable and requires immediate attention"
   },
 };
 
 const severityConfig = {
-  critical: { color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20", icon: XCircle },
-  warning: { color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", icon: AlertTriangle },
-  info: { color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", icon: CheckCircle },
+  critical: { 
+    color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20", 
+    icon: XCircle,
+    tooltip: "Critical issue requiring immediate intervention"
+  },
+  warning: { 
+    color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", 
+    icon: AlertTriangle,
+    tooltip: "Warning condition that should be monitored"
+  },
+  info: { 
+    color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", 
+    icon: CheckCircle,
+    tooltip: "Informational alert, no action required"
+  },
 };
 
 const overallStatusConfig = {
-  healthy: { color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30", icon: CheckCircle },
-  degraded: { color: "text-amber-400", bg: "bg-amber-500/20", border: "border-amber-500/30", icon: AlertTriangle },
-  critical: { color: "text-rose-400", bg: "bg-rose-500/20", border: "border-rose-500/30", icon: WifiOff },
+  healthy: { 
+    color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30", 
+    icon: CheckCircle,
+    tooltip: "All systems operating normally"
+  },
+  degraded: { 
+    color: "text-amber-400", bg: "bg-amber-500/20", border: "border-amber-500/30", 
+    icon: AlertTriangle,
+    tooltip: "Some services experiencing issues"
+  },
+  critical: { 
+    color: "text-rose-400", bg: "bg-rose-500/20", border: "border-rose-500/30", 
+    icon: WifiOff,
+    tooltip: "Critical system failure - immediate action required"
+  },
 };
 
 // API Hooks
@@ -141,56 +175,70 @@ function useTestService() {
   });
 }
 
-// Components
-function LatencyMiniChart({ data, color }: { data: number[]; color: string }) {
+// Components with Enhanced Tooltips
+function LatencyMiniChart({ data, color, serviceName }: { data: number[]; color: string; serviceName: string }) {
   if (!data?.length) return <div className="h-10 w-24 opacity-30" />;
   const chartData = data.slice(-10).map((val, i) => ({ value: val, index: i }));
   
   return (
-    <div className="h-10 w-24">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData}>
-          <defs>
-            <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
-              <stop offset="95%" stopColor={color} stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-          <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#grad-${color})`} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
+    <Tooltip content={`${serviceName} latency trend (last 10 checks)`} position="top">
+      <div className="h-10 w-24">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData}>
+            <defs>
+              <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
+                <stop offset="95%" stopColor={color} stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#grad-${color})`} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </Tooltip>
   );
 }
 
-function StatCard({ label, value, subtext, icon: Icon, color = "blue", trend }: any) {
-  const colors = {
-    blue: "text-blue-400 bg-blue-500/10 border-blue-500/20",
-    green: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    amber: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-    rose: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-    purple: "text-violet-400 bg-violet-500/10 border-violet-500/20",
+// Improved StatCard with consistent layout
+function StatCard({ label, value, subtext, icon: Icon, color = "blue", trend, tooltip }: any) {
+  const colors: Record<string, { text: string; bg: string; border: string }> = {
+    blue: { text: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
+    green: { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+    amber: { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+    rose: { text: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" },
+    purple: { text: "text-violet-400", bg: "bg-violet-500/10", border: "border-violet-500/20" },
   };
 
+  const c = colors[color];
+
   return (
-    <div className="glass-card p-4">
-      <div className="flex items-start justify-between">
-        <div className={`w-10 h-10 rounded-xl ${colors[color as keyof typeof colors]} border flex items-center justify-center`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        {trend !== undefined && (
-          <div className={`flex items-center gap-1 text-xs font-medium ${trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-            {trend >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-            {Math.abs(trend)}%
+    <Tooltip content={tooltip} position="top">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card p-4 h-full cursor-help hover:border-slate-600/50 transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-12 h-12 rounded-xl ${c.bg} ${c.border} border flex items-center justify-center shrink-0`}>
+            <Icon className={`w-6 h-6 ${c.text}`} />
           </div>
-        )}
-      </div>
-      <div className="mt-3">
-        <p className="text-2xl font-bold text-slate-100">{value}</p>
-        <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-        {subtext && <p className="text-[10px] text-slate-600 mt-1">{subtext}</p>}
-      </div>
-    </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-xl font-bold text-slate-100">{value}</p>
+              {trend !== undefined && (
+                <Tooltip content={`${trend >= 0 ? "+" : ""}${trend}% vs last period`} position="top">
+                  <span className={`text-xs font-medium cursor-help ${trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {trend >= 0 ? "+" : ""}{trend}%
+                  </span>
+                </Tooltip>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 truncate">{label}</p>
+            {subtext && <p className="text-[10px] text-slate-600 mt-0.5">{subtext}</p>}
+          </div>
+        </div>
+      </motion.div>
+    </Tooltip>
   );
 }
 
@@ -210,45 +258,64 @@ function ServiceCard({ service, onTest, onAnalytics }: {
       <div className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl ${config.bg} ${config.border} border flex items-center justify-center`}>
-              <Server className={`w-5 h-5 ${config.color}`} />
-            </div>
+            <Tooltip content={config.tooltip} position="top">
+              <div className={`w-10 h-10 rounded-xl ${config.bg} ${config.border} border flex items-center justify-center cursor-help`}>
+                <Server className={`w-5 h-5 ${config.color}`} />
+              </div>
+            </Tooltip>
             <div>
-              <h3 className="font-semibold text-slate-100 text-sm">{service.name}</h3>
+              <Tooltip content={`Service: ${service.name}`} position="top">
+                <h3 className="font-semibold text-slate-100 text-sm cursor-help">{service.name}</h3>
+              </Tooltip>
               <div className="flex items-center gap-2 mt-0.5">
                 <StatusIcon className={`w-3.5 h-3.5 ${config.color}`} />
-                <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
-                {service.version && <span className="text-[10px] text-slate-500">v{service.version}</span>}
+                <Tooltip content={`Current status: ${config.label}`} position="top">
+                  <span className={`text-xs font-medium ${config.color} cursor-help`}>{config.label}</span>
+                </Tooltip>
+                {service.version && (
+                  <Tooltip content={`Version: ${service.version}`} position="top">
+                    <span className="text-[10px] text-slate-500 cursor-help">v{service.version}</span>
+                  </Tooltip>
+                )}
               </div>
             </div>
           </div>
           <LatencyMiniChart 
             data={[service.minLatencyMs, service.avgLatencyMs, service.latencyMs, service.maxLatencyMs]} 
             color={service.status === "online" ? "#10b981" : service.status === "degraded" ? "#f59e0b" : "#f43f5e"}
+            serviceName={service.name}
           />
         </div>
 
         <div className="grid grid-cols-4 gap-3 mt-3">
-          <div>
-            <p className="text-[9px] uppercase tracking-wider text-slate-500">Current</p>
-            <p className={`text-sm font-bold ${service.latencyMs < 100 ? "text-emerald-400" : service.latencyMs < 300 ? "text-amber-400" : "text-rose-400"}`}>
-              {service.latencyMs}ms
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] uppercase tracking-wider text-slate-500">Avg</p>
-            <p className="text-sm font-bold text-slate-300">{service.avgLatencyMs}ms</p>
-          </div>
-          <div>
-            <p className="text-[9px] uppercase tracking-wider text-slate-500">Availability</p>
-            <p className={`text-sm font-bold ${service.availability24h > 99 ? "text-emerald-400" : service.availability24h > 95 ? "text-amber-400" : "text-rose-400"}`}>
-              {service.availability24h}%
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] uppercase tracking-wider text-slate-500">Uptime</p>
-            <p className="text-sm font-bold text-slate-300">{service.uptimeFormatted || "Just started"}</p>
-          </div>
+          <Tooltip content="Current response time in milliseconds" position="top">
+            <div className="cursor-help">
+              <p className="text-[9px] uppercase tracking-wider text-slate-500">Current</p>
+              <p className={`text-sm font-bold ${service.latencyMs < 100 ? "text-emerald-400" : service.latencyMs < 300 ? "text-amber-400" : "text-rose-400"}`}>
+                {service.latencyMs}ms
+              </p>
+            </div>
+          </Tooltip>
+          <Tooltip content="Average response time over last 24 hours" position="top">
+            <div className="cursor-help">
+              <p className="text-[9px] uppercase tracking-wider text-slate-500">Avg</p>
+              <p className="text-sm font-bold text-slate-300">{service.avgLatencyMs}ms</p>
+            </div>
+          </Tooltip>
+          <Tooltip content="Service availability percentage (99.9% is excellent)" position="top">
+            <div className="cursor-help">
+              <p className="text-[9px] uppercase tracking-wider text-slate-500">Availability</p>
+              <p className={`text-sm font-bold ${service.availability24h > 99 ? "text-emerald-400" : service.availability24h > 95 ? "text-amber-400" : "text-rose-400"}`}>
+                {service.availability24h}%
+              </p>
+            </div>
+          </Tooltip>
+          <Tooltip content="Time since service started" position="top">
+            <div className="cursor-help">
+              <p className="text-[9px] uppercase tracking-wider text-slate-500">Uptime</p>
+              <p className="text-sm font-bold text-slate-300">{service.uptimeFormatted || "Just started"}</p>
+            </div>
+          </Tooltip>
         </div>
 
         <div className="h-1.5 rounded-full bg-slate-700/50 overflow-hidden mt-3">
@@ -260,29 +327,35 @@ function ServiceCard({ service, onTest, onAnalytics }: {
         </div>
 
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700/50">
-          <button 
-            onClick={() => onTest(service.name)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition-colors"
-          >
-            <Play className="w-3.5 h-3.5" />
-            Test
-          </button>
-          <button 
-            onClick={() => onAnalytics(service.name)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-xs font-medium text-amber-400 transition-colors"
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            Analytics
-          </button>
-          <a 
-            href={service.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition-colors ml-auto"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Endpoint
-          </a>
+          <Tooltip content="Test service endpoint manually" position="bottom">
+            <button 
+              onClick={() => onTest(service.name)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition-colors"
+            >
+              <Play className="w-3.5 h-3.5" />
+              Test
+            </button>
+          </Tooltip>
+          <Tooltip content="View detailed analytics for this service" position="bottom">
+            <button 
+              onClick={() => onAnalytics(service.name)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-xs font-medium text-amber-400 transition-colors"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Analytics
+            </button>
+          </Tooltip>
+          <Tooltip content="Open service endpoint in new tab" position="bottom">
+            <a 
+              href={service.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition-colors ml-auto"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Endpoint
+            </a>
+          </Tooltip>
         </div>
       </div>
     </motion.div>
@@ -300,42 +373,54 @@ function AlertsPanel({ alerts }: { alerts: HealthAlert[] }) {
           <Bell className="w-5 h-5 text-amber-400" />
           <h2 className="font-semibold text-slate-100">Alerts</h2>
           {alerts.filter(a => !a.resolved).length > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-xs font-medium">
-              {alerts.filter(a => !a.resolved).length}
-            </span>
+            <Tooltip content={`${alerts.filter(a => !a.resolved).length} unresolved alerts requiring attention`} position="top">
+              <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-xs font-medium cursor-help">
+                {alerts.filter(a => !a.resolved).length}
+              </span>
+            </Tooltip>
           )}
         </div>
-        <button 
-          onClick={() => setShowResolved(!showResolved)}
-          className="text-xs text-slate-400 hover:text-slate-200"
-        >
-          {showResolved ? "Hide Resolved" : "Show Resolved"}
-        </button>
+        <Tooltip content={showResolved ? "Hide resolved alerts" : "Show resolved alerts"} position="left">
+          <button 
+            onClick={() => setShowResolved(!showResolved)}
+            className="text-xs text-slate-400 hover:text-slate-200"
+          >
+            {showResolved ? "Hide Resolved" : "Show Resolved"}
+          </button>
+        </Tooltip>
       </div>
 
-      <div className="space-y-2 max-h-80 overflow-y-auto">
+      <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
         {filteredAlerts.length === 0 ? (
-          <p className="text-sm text-slate-500 text-center py-4">No active alerts</p>
+          <Tooltip content="No active issues detected" position="top">
+            <p className="text-sm text-slate-500 text-center py-4 cursor-help">No active alerts</p>
+          </Tooltip>
         ) : (
           filteredAlerts.slice(0, 10).map((alert) => {
             const config = severityConfig[alert.severity];
             const Icon = config.icon;
             return (
-              <div 
+              <Tooltip 
                 key={alert.id} 
-                className={`p-3 rounded-lg border ${config.bg} ${config.border} ${alert.resolved ? "opacity-50" : ""}`}
+                content={`${alert.service}: ${alert.message}. ${alert.resolved ? "Resolved" : "Active issue"}`}
+                position="left"
+                variant={alert.severity === "critical" ? "warning" : "default"}
               >
-                <div className="flex items-start gap-2">
-                  <Icon className={`w-4 h-4 ${config.color} mt-0.5`} />
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${config.color}`}>{alert.service}</p>
-                    <p className="text-xs text-slate-300">{alert.message}</p>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
-                    </p>
+                <div 
+                  className={`p-3 rounded-lg border ${config.bg} ${config.border} ${alert.resolved ? "opacity-50" : ""} cursor-help`}
+                >
+                  <div className="flex items-start gap-2">
+                    <Icon className={`w-4 h-4 ${config.color} mt-0.5`} />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium ${config.color}`}>{alert.service}</p>
+                      <p className="text-xs text-slate-300">{alert.message}</p>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Tooltip>
             );
           })
         )}
@@ -358,6 +443,9 @@ function LatencyTrendsChart({ data }: { data: any[] }) {
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp className="w-5 h-5 text-blue-400" />
         <h2 className="font-semibold text-slate-100">Latency Trends (24h)</h2>
+        <Tooltip content="Average response time across all services over last 24 hours" variant="info">
+          <TooltipIndicator variant="info" />
+        </Tooltip>
       </div>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
@@ -365,7 +453,7 @@ function LatencyTrendsChart({ data }: { data: any[] }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
             <XAxis dataKey="time" tick={{ fill: "#64748b", fontSize: 10 }} />
             <YAxis tick={{ fill: "#64748b", fontSize: 10 }} />
-            <Tooltip 
+            <RechartsTooltip 
               contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }}
               labelStyle={{ color: "#94a3b8" }}
             />
@@ -390,24 +478,32 @@ function TestModal({ service, result, onClose }: { service: string; result: any;
             <Terminal className="w-5 h-5 text-amber-400" />
             <h2 className="font-semibold text-slate-100">Test Endpoint: {service}</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
-            <X className="w-5 h-5" />
-          </button>
+          <Tooltip content="Close test results" position="bottom">
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
+              <X className="w-5 h-5" />
+            </button>
+          </Tooltip>
         </div>
         <div className="p-4 overflow-y-auto max-h-[60vh]">
           {result ? (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${result.success ? "bg-emerald-500" : "bg-rose-500"}`} />
+                <Tooltip content={result.success ? "Test passed successfully" : "Test failed - see details below"} position="top">
+                  <div className={`w-3 h-3 rounded-full cursor-help ${result.success ? "bg-emerald-500" : "bg-rose-500"}`} />
+                </Tooltip>
                 <span className={result.success ? "text-emerald-400" : "text-rose-400"}>
                   {result.success ? "Success" : "Failed"}
                 </span>
                 <span className="text-slate-500">•</span>
-                <span className="text-slate-400">{result.latencyMs}ms</span>
+                <Tooltip content="Response time in milliseconds" position="top">
+                  <span className="text-slate-400 cursor-help">{result.latencyMs}ms</span>
+                </Tooltip>
                 {result.statusCode && (
                   <>
                     <span className="text-slate-500">•</span>
-                    <span className="text-slate-400">Status {result.statusCode}</span>
+                    <Tooltip content="HTTP status code" position="top">
+                      <span className="text-slate-400 cursor-help">Status {result.statusCode}</span>
+                    </Tooltip>
                   </>
                 )}
               </div>
@@ -452,14 +548,13 @@ function TestModal({ service, result, onClose }: { service: string; result: any;
   );
 }
 
-// NEW: Service Analytics Modal
+// Analytics Modal with Tooltips
 function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose: () => void }) {
   const { data: details, isLoading } = useServiceDetails(serviceName);
   const { data: health } = useEngineHealth();
   
   const service = health?.services.find(s => s.name === serviceName);
 
-  // Prepare latency chart data
   const latencyChartData = useMemo(() => {
     if (!details?.latencyHistory?.length) return [];
     return details.latencyHistory.map((val, i) => ({
@@ -468,7 +563,6 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
     }));
   }, [details?.latencyHistory]);
 
-  // Prepare status timeline data
   const statusTimelineData = useMemo(() => {
     if (!details?.statusHistory?.length) return [];
     return details.statusHistory.slice(-20).map((s: any) => ({
@@ -477,7 +571,6 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
     }));
   }, [details?.statusHistory]);
 
-  // Service alerts
   const serviceAlerts = details?.alerts?.filter((a: HealthAlert) => a.service === serviceName) || [];
 
   return (
@@ -490,24 +583,28 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-700/50">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              service?.status === "online" ? "bg-emerald-500/10 border border-emerald-500/20" :
-              service?.status === "degraded" ? "bg-amber-500/10 border border-amber-500/20" :
-              "bg-rose-500/10 border border-rose-500/20"
-            }`}>
-              <BarChart3 className={`w-5 h-5 ${
-                service?.status === "online" ? "text-emerald-400" :
-                service?.status === "degraded" ? "text-amber-400" : "text-rose-400"
-              }`} />
-            </div>
+            <Tooltip content={`Status: ${service?.status || "Unknown"}`} position="bottom">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center cursor-help ${
+                service?.status === "online" ? "bg-emerald-500/10 border border-emerald-500/20" :
+                service?.status === "degraded" ? "bg-amber-500/10 border border-amber-500/20" :
+                "bg-rose-500/10 border border-rose-500/20"
+              }`}>
+                <BarChart3 className={`w-5 h-5 ${
+                  service?.status === "online" ? "text-emerald-400" :
+                  service?.status === "degraded" ? "text-amber-400" : "text-rose-400"
+                }`} />
+              </div>
+            </Tooltip>
             <div>
               <h2 className="font-semibold text-slate-100 text-lg">{serviceName}</h2>
               <p className="text-xs text-slate-400">Service Analytics & Performance</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1">
-            <X className="w-6 h-6" />
-          </button>
+          <Tooltip content="Close analytics" position="bottom">
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1">
+              <X className="w-6 h-6" />
+            </button>
+          </Tooltip>
         </div>
 
         <div className="p-5 overflow-y-auto max-h-[calc(90vh-80px)]">
@@ -518,41 +615,52 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
           ) : (
             <div className="space-y-6">
               {/* Key Metrics Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 rounded-xl bg-slate-800/50">
-                  <p className="text-xs text-slate-500 mb-1">Current Latency</p>
-                  <p className={`text-2xl font-bold ${
-                    (service?.latencyMs || 0) < 100 ? "text-emerald-400" : 
-                    (service?.latencyMs || 0) < 300 ? "text-amber-400" : "text-rose-400"
-                  }`}>
-                    {service?.latencyMs}ms
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-800/50">
-                  <p className="text-xs text-slate-500 mb-1">Average Latency</p>
-                  <p className="text-2xl font-bold text-slate-200">{service?.avgLatencyMs}ms</p>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-800/50">
-                  <p className="text-xs text-slate-500 mb-1">24h Availability</p>
-                  <p className={`text-2xl font-bold ${
-                    (service?.availability24h || 0) > 99 ? "text-emerald-400" : 
-                    (service?.availability24h || 0) > 95 ? "text-amber-400" : "text-rose-400"
-                  }`}>
-                    {service?.availability24h}%
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-800/50">
-                  <p className="text-xs text-slate-500 mb-1">Uptime</p>
-                  <p className="text-2xl font-bold text-slate-200">{service?.uptimeFormatted || "N/A"}</p>
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Tooltip content="Current response time" position="top">
+                  <div className="p-4 rounded-xl bg-slate-800/50 cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Current Latency</p>
+                    <p className={`text-2xl font-bold ${
+                      (service?.latencyMs || 0) < 100 ? "text-emerald-400" : 
+                      (service?.latencyMs || 0) < 300 ? "text-amber-400" : "text-rose-400"
+                    }`}>
+                      {service?.latencyMs}ms
+                    </p>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Average over last 24 hours" position="top">
+                  <div className="p-4 rounded-xl bg-slate-800/50 cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Average Latency</p>
+                    <p className="text-2xl font-bold text-slate-200">{service?.avgLatencyMs}ms</p>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Uptime percentage (99.9% = excellent)" position="top">
+                  <div className="p-4 rounded-xl bg-slate-800/50 cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">24h Availability</p>
+                    <p className={`text-2xl font-bold ${
+                      (service?.availability24h || 0) > 99 ? "text-emerald-400" : 
+                      (service?.availability24h || 0) > 95 ? "text-amber-400" : "text-rose-400"
+                    }`}>
+                      {service?.availability24h}%
+                    </p>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Time since service started" position="top">
+                  <div className="p-4 rounded-xl bg-slate-800/50 cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Uptime</p>
+                    <p className="text-2xl font-bold text-slate-200">{service?.uptimeFormatted || "N/A"}</p>
+                  </div>
+                </Tooltip>
               </div>
 
               {/* Latency History Chart */}
               <div className="glass-card p-4">
-                <h3 className="font-semibold text-slate-100 mb-4 flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-4">
                   <TrendingUp className="w-4 h-4 text-blue-400" />
-                  Latency History
-                </h3>
+                  <h3 className="font-semibold text-slate-100">Latency History</h3>
+                  <Tooltip content="Response time trends over recent checks" variant="info">
+                    <TooltipIndicator variant="info" />
+                  </Tooltip>
+                </div>
                 {latencyChartData.length > 0 ? (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -566,7 +674,7 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                         <XAxis dataKey="index" tick={{ fill: "#64748b", fontSize: 10 }} />
                         <YAxis tick={{ fill: "#64748b", fontSize: 10 }} />
-                        <Tooltip 
+                        <RechartsTooltip 
                           contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }}
                           labelStyle={{ color: "#94a3b8" }}
                           formatter={(val: number) => [`${val}ms`, "Latency"]}
@@ -586,29 +694,35 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Status Timeline */}
                 <div className="glass-card p-4">
-                  <h3 className="font-semibold text-slate-100 mb-4 flex items-center gap-2">
+                  <div className="flex items-center gap-2 mb-4">
                     <History className="w-4 h-4 text-amber-400" />
-                    Recent Status Changes
-                  </h3>
+                    <h3 className="font-semibold text-slate-100">Recent Status Changes</h3>
+                  </div>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {statusTimelineData.length > 0 ? (
                       statusTimelineData.map((item, i) => (
-                        <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/30">
-                          <div className={`w-2 h-2 rounded-full ${
-                            item.status === "online" ? "bg-emerald-500" :
-                            item.status === "degraded" ? "bg-amber-500" : "bg-rose-500"
-                          }`} />
-                          <span className="text-xs text-slate-400 w-16">{item.time}</span>
-                          <span className={`text-sm font-medium capitalize ${
-                            item.status === "online" ? "text-emerald-400" :
-                            item.status === "degraded" ? "text-amber-400" : "text-rose-400"
-                          }`}>
-                            {item.status}
-                          </span>
-                        </div>
+                        <Tooltip 
+                          key={i} 
+                          content={`Status changed to ${item.status} at ${item.time}`}
+                          position="right"
+                        >
+                          <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/30 cursor-help">
+                            <div className={`w-2 h-2 rounded-full ${
+                              item.status === "online" ? "bg-emerald-500" :
+                              item.status === "degraded" ? "bg-amber-500" : "bg-rose-500"
+                            }`} />
+                            <span className="text-xs text-slate-400 w-16">{item.time}</span>
+                            <span className={`text-sm font-medium capitalize ${
+                              item.status === "online" ? "text-emerald-400" :
+                              item.status === "degraded" ? "text-amber-400" : "text-rose-400"
+                            }`}>
+                              {item.status}
+                            </span>
+                          </div>
+                        </Tooltip>
                       ))
                     ) : (
                       <p className="text-slate-500 text-center py-4">No status changes recorded</p>
@@ -618,31 +732,37 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
 
                 {/* Service Alerts */}
                 <div className="glass-card p-4">
-                  <h3 className="font-semibold text-slate-100 mb-4 flex items-center gap-2">
+                  <div className="flex items-center gap-2 mb-4">
                     <Bell className="w-4 h-4 text-rose-400" />
-                    Service Alerts
-                  </h3>
+                    <h3 className="font-semibold text-slate-100">Service Alerts</h3>
+                  </div>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {serviceAlerts.length > 0 ? (
                       serviceAlerts.slice(0, 10).map((alert: HealthAlert) => {
                         const config = severityConfig[alert.severity];
                         const Icon = config.icon;
                         return (
-                          <div 
+                          <Tooltip 
                             key={alert.id}
-                            className={`p-3 rounded-lg border ${config.bg} ${config.border} ${alert.resolved ? "opacity-50" : ""}`}
+                            content={`${alert.severity}: ${alert.message}`}
+                            position="left"
+                            variant={alert.severity === "critical" ? "warning" : "default"}
                           >
-                            <div className="flex items-start gap-2">
-                              <Icon className={`w-4 h-4 ${config.color} mt-0.5`} />
-                              <div className="flex-1">
-                                <p className="text-xs text-slate-300">{alert.message}</p>
-                                <p className="text-[10px] text-slate-500 mt-1">
-                                  {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
-                                  {alert.resolved && " • Resolved"}
-                                </p>
+                            <div 
+                              className={`p-3 rounded-lg border ${config.bg} ${config.border} ${alert.resolved ? "opacity-50" : ""} cursor-help`}
+                            >
+                              <div className="flex items-start gap-2">
+                                <Icon className={`w-4 h-4 ${config.color} mt-0.5`} />
+                                <div className="flex-1">
+                                  <p className="text-xs text-slate-300">{alert.message}</p>
+                                  <p className="text-[10px] text-slate-500 mt-1">
+                                    {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
+                                    {alert.resolved && " • Resolved"}
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </Tooltip>
                         );
                       })
                     ) : (
@@ -655,24 +775,28 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
               {/* Endpoint Info */}
               <div className="glass-card p-4">
                 <h3 className="font-semibold text-slate-100 mb-3">Endpoint Information</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-slate-500">URL:</span>
-                    <a 
-                      href={service?.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="ml-2 text-amber-400 hover:text-amber-300 inline-flex items-center gap-1"
-                    >
-                      {service?.url}
-                      <ArrowUpRight className="w-3 h-3" />
-                    </a>
+                    <Tooltip content="Click to open endpoint in new tab" position="top">
+                      <a 
+                        href={service?.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="ml-2 text-amber-400 hover:text-amber-300 inline-flex items-center gap-1"
+                      >
+                        {service?.url}
+                        <ArrowUpRight className="w-3 h-3" />
+                      </a>
+                    </Tooltip>
                   </div>
                   <div>
                     <span className="text-slate-500">Last Checked:</span>
-                    <span className="ml-2 text-slate-300">
-                      {service?.lastChecked ? formatDistanceToNow(new Date(service.lastChecked), { addSuffix: true }) : "N/A"}
-                    </span>
+                    <Tooltip content="Most recent health check timestamp" position="top">
+                      <span className="ml-2 text-slate-300 cursor-help">
+                        {service?.lastChecked ? formatDistanceToNow(new Date(service.lastChecked), { addSuffix: true }) : "N/A"}
+                      </span>
+                    </Tooltip>
                   </div>
                   {service?.version && (
                     <div>
@@ -683,7 +807,9 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
                   {service?.consecutiveFailures !== undefined && service.consecutiveFailures > 0 && (
                     <div>
                       <span className="text-slate-500">Consecutive Failures:</span>
-                      <span className="ml-2 text-rose-400">{service.consecutiveFailures}</span>
+                      <Tooltip content="Number of consecutive failed health checks" position="top">
+                        <span className="ml-2 text-rose-400 cursor-help">{service.consecutiveFailures}</span>
+                      </Tooltip>
                     </div>
                   )}
                 </div>
@@ -696,7 +822,7 @@ function AnalyticsModal({ serviceName, onClose }: { serviceName: string; onClose
   );
 }
 
-// Main Page
+// Main Page with Enhanced Tooltips
 export default function EnginePage() {
   const { data: health, isLoading, dataUpdatedAt, refetch, isFetching } = useEngineHealth();
   const { data: history } = useEngineHistory(24);
@@ -741,68 +867,117 @@ export default function EnginePage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            <Activity className="w-6 h-6 text-amber-400" />
-            System Monitor
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+              <Activity className="w-6 h-6 text-amber-400" />
+              System Monitor
+            </h1>
+            <Tooltip 
+              content="Real-time monitoring of all platform microservices and infrastructure"
+              variant="info"
+            >
+              <TooltipIndicator variant="info" />
+            </Tooltip>
+          </div>
           <p className="text-sm text-slate-400 mt-1">
             Production-grade service monitoring with real-time analytics
           </p>
         </div>
         <div className="flex items-center gap-3">
           {healthData && (
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border ${overallConfig?.bg} ${overallConfig?.border}`}>
-              <OverallIcon className={`w-5 h-5 ${overallConfig?.color}`} />
-              <span className={`font-semibold ${overallConfig?.color}`}>
-                {healthData.overallStatus.toUpperCase()}
-              </span>
-            </div>
+            <Tooltip content={overallConfig?.tooltip} position="bottom">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-help ${overallConfig?.bg} ${overallConfig?.border}`}>
+                <OverallIcon className={`w-5 h-5 ${overallConfig?.color}`} />
+                <span className={`font-semibold ${overallConfig?.color}`}>
+                  {healthData.overallStatus.toUpperCase()}
+                </span>
+              </div>
+            </Tooltip>
           )}
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 text-slate-400 ${isFetching ? "animate-spin" : ""}`} />
-          </button>
+          <Tooltip content="Refresh health data now (auto-refreshes every 10s)" position="bottom">
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 text-slate-400 ${isFetching ? "animate-spin" : ""}`} />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="h-24 rounded-2xl bg-slate-800/50 animate-pulse" />
           ))}
         </div>
       ) : healthData ? (
         <>
-          {/* Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <StatCard label="Services Online" value={`${counts.online}/${counts.all}`} icon={Wifi} color="green" trend={healthData.statistics.uptimePercentage} />
-            <StatCard label="Avg Response" value={`${healthData.statistics.avgResponseTime}ms`} subtext={healthData.statistics.avgResponseTime < 100 ? "Excellent" : "Good"} icon={Zap} color="blue" />
-            <StatCard label="Degraded" value={counts.degraded} icon={AlertTriangle} color="amber" />
-            <StatCard label="Offline" value={counts.offline} icon={WifiOff} color="rose" />
-            <div className="glass-card p-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                  healthData.database.status === "connected" 
-                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
-                    : healthData.database.status === "slow"
-                    ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                    : "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                }`}>
-                  <Database className="w-5 h-5" />
+          {/* Stats Row - Consistent Height Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} className="h-full">
+              <StatCard 
+                label="Services Online" 
+                value={`${counts.online}/${counts.all}`} 
+                icon={Wifi} 
+                color="green" 
+                trend={healthData.statistics.uptimePercentage}
+                tooltip={`${counts.online} of ${counts.all} services are online`}
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="h-full">
+              <StatCard 
+                label="Avg Response" 
+                value={`${healthData.statistics.avgResponseTime}ms`} 
+                subtext={healthData.statistics.avgResponseTime < 100 ? "Excellent" : "Good"}
+                icon={Zap} 
+                color="blue"
+                tooltip="Average latency across all services"
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="h-full">
+              <StatCard 
+                label="Degraded" 
+                value={counts.degraded} 
+                icon={AlertTriangle} 
+                color="amber"
+                tooltip="Services with performance issues but still operational"
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="h-full">
+              <StatCard 
+                label="Offline" 
+                value={counts.offline} 
+                icon={WifiOff} 
+                color="rose"
+                tooltip="Services that are completely unavailable"
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="h-full">
+              <Tooltip content="Database connection status and query performance" position="top">
+                <div className="glass-card p-4 cursor-help h-full hover:border-slate-600/50 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${
+                      healthData.database.status === "connected"
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : healthData.database.status === "slow"
+                        ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                        : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                    }`}>
+                      <Database className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xl font-bold text-slate-100">{healthData.database.latencyMs}ms</p>
+                      <p className="text-xs text-slate-500 truncate">Database</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-slate-100">{healthData.database.latencyMs}ms</p>
-                  <p className="text-xs text-slate-500">Database</p>
-                </div>
-              </div>
-            </div>
+              </Tooltip>
+            </motion.div>
           </div>
-
           {/* Charts & Alerts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="lg:col-span-2">
               <LatencyTrendsChart data={history || []} />
             </div>
@@ -812,27 +987,33 @@ export default function EnginePage() {
           {/* Services Grid */}
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="font-semibold text-slate-100 flex items-center gap-2">
-                <Server className="w-5 h-5 text-slate-400" />
-                Microservices
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-slate-100 flex items-center gap-2">
+                  <Server className="w-5 h-5 text-slate-400" />
+                  Microservices
+                </h2>
+                <Tooltip content="Individual service health and performance" variant="info">
+                  <TooltipIndicator variant="info" />
+                </Tooltip>
+              </div>
               <div className="flex p-1 bg-slate-800/50 rounded-xl">
                 {(["all", "online", "degraded", "offline"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      filter === f ? "bg-amber-500 text-slate-900" : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)} 
-                    <span className="ml-1 opacity-70">({counts[f]})</span>
-                  </button>
+                  <Tooltip key={f} content={`Show ${f} services`} position="bottom">
+                    <button
+                      onClick={() => setFilter(f)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        filter === f ? "bg-amber-500 text-slate-900" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)} 
+                      <span className="ml-1 opacity-70">({counts[f]})</span>
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredServices.map((service) => (
                   <motion.div
@@ -855,9 +1036,12 @@ export default function EnginePage() {
           </div>
 
           {dataUpdatedAt && (
-            <p className="text-xs text-slate-500 text-center pt-4 border-t border-slate-800">
-              Last updated: {new Date(dataUpdatedAt).toLocaleTimeString()} ({formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true })})
-            </p>
+            <Tooltip content={`Last health check: ${new Date(dataUpdatedAt).toLocaleString()}`} position="top">
+              <p className="text-xs text-slate-500 text-center pt-4 border-t border-slate-800 cursor-help">
+                Last updated: {new Date(dataUpdatedAt).toLocaleTimeString()} 
+                ({formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true })})
+              </p>
+            </Tooltip>
           )}
         </>
       ) : null}

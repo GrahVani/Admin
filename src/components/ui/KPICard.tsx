@@ -2,9 +2,10 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { LucideIcon, TrendingUp, TrendingDown } from "lucide-react";
+import { LucideIcon, TrendingUp, TrendingDown, Info } from "lucide-react";
 import { Sparkline } from "./Sparkline";
 import { Skeleton } from "./Skeleton";
+import { Tooltip } from "./Tooltip";
 
 interface KPICardProps {
   label: string;
@@ -14,6 +15,7 @@ interface KPICardProps {
   trend?: number;
   trendData?: number[];
   description?: string;
+  tooltip?: string;
   loading?: boolean;
   color?: "accent" | "purple" | "success" | "danger" | "info" | "warning" | "cyan" | "pink";
   onClick?: () => void;
@@ -87,6 +89,7 @@ export function KPICard({
   trend,
   trendData,
   description,
+  tooltip,
   loading,
   color = "accent",
   onClick,
@@ -97,24 +100,11 @@ export function KPICard({
   const TrendIcon = trendPositive ? TrendingUp : TrendingDown;
   const trendColor = trendPositive ? "text-emerald-400" : "text-red-400";
 
-  if (loading) {
-    return (
-      <div className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/50">
-        <div className="flex items-start justify-between mb-3">
-          <Skeleton variant="circular" width={40} height={40} />
-          <Skeleton variant="text" width={50} height={16} />
-        </div>
-        <Skeleton variant="text" width={80} height={24} className="mb-1" />
-        <Skeleton variant="text" width={120} height={14} />
-      </div>
-    );
-  }
-
-  return (
+  const cardContent = (
     <motion.div
-      className={`relative p-5 rounded-2xl bg-slate-800/30 border border-slate-700/50 overflow-hidden group cursor-default ${
-        onClick ? "cursor-pointer hover:border-slate-600" : "hover:border-slate-600/50"
-      }`}
+      className={`relative p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 overflow-hidden h-full flex flex-col ${
+        onClick ? "cursor-pointer hover:border-slate-500" : "hover:border-slate-600/50"
+      } ${tooltip ? "cursor-help" : ""}`}
       whileHover={onClick ? { y: -2, transition: { duration: 0.2 } } : undefined}
       onClick={onClick}
     >
@@ -123,60 +113,71 @@ export function KPICard({
         className={`absolute inset-0 bg-gradient-to-br ${colors.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
       />
 
-      <div className="relative">
+      <div className="relative flex flex-col h-full">
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colors.bg} ${colors.border} border`}>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors.bg} ${colors.border} border`}>
             <Icon className={`w-5 h-5 ${colors.text}`} />
           </div>
 
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-2">
             {trend !== undefined && (
-              <div className={`flex items-center gap-1 text-xs font-semibold ${trendColor}`}>
-                <TrendIcon className="w-3.5 h-3.5" />
-                <span>{Math.abs(trend)}%</span>
-              </div>
+              <Tooltip content={`${trendPositive ? "+" : ""}${trend}% change from previous period`} position="top">
+                <div className={`flex items-center gap-1 text-xs font-semibold ${trendColor} cursor-help px-2 py-1 rounded-lg bg-slate-900/50`}>
+                  <TrendIcon className="w-3.5 h-3.5" />
+                  <span>{Math.abs(trend)}%</span>
+                </div>
+              </Tooltip>
             )}
             {trendData && trendData.length > 0 && (
-              <Sparkline
-                data={trendData}
-                width={70}
-                height={24}
-                color={colors.chart}
-              />
+              <Tooltip content="7-day trend" position="top">
+                <div className="cursor-help">
+                  <Sparkline
+                    data={trendData}
+                    width={70}
+                    height={24}
+                    color={colors.chart}
+                  />
+                </div>
+              </Tooltip>
             )}
           </div>
         </div>
 
         {/* Value */}
-        <div className="flex items-baseline gap-2">
+        <div className="flex-1 flex flex-col justify-end">
           <h3 className="text-2xl font-bold text-slate-100 tracking-tight">
             {value}
           </h3>
-        </div>
 
-        {/* Label & Description */}
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mt-1">
-          {label}
-        </p>
-        {description && (
-          <p className="text-xs text-slate-600 mt-0.5">{description}</p>
-        )}
-
-        {/* Progress bar */}
-        {trend !== undefined && (
-          <div className="mt-3 h-1 rounded-full bg-slate-700 overflow-hidden">
-            <motion.div
-              className={`h-full rounded-full ${colors.text.replace("text-", "bg-")}`}
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, 50 + Math.abs(trend || 0))}%` }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-            />
+          {/* Label & Description */}
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              {label}
+            </p>
+            {tooltip && (
+              <Tooltip content={tooltip} position="right">
+                <Info className="w-3.5 h-3.5 text-slate-600 cursor-help hover:text-slate-400 transition-colors" />
+              </Tooltip>
+            )}
           </div>
-        )}
+          {description && (
+            <p className="text-xs text-slate-600 mt-0.5">{description}</p>
+          )}
+        </div>
       </div>
     </motion.div>
   );
+
+  if (tooltip) {
+    return (
+      <Tooltip content={tooltip} position="top">
+        {cardContent}
+      </Tooltip>
+    );
+  }
+
+  return cardContent;
 }
 
 // Compact KPI for smaller spaces
@@ -184,13 +185,14 @@ interface KPICardCompactProps {
   label: string;
   value: string | number;
   trend?: number;
+  tooltip?: string;
   loading?: boolean;
 }
 
-export function KPICardCompact({ label, value, trend, loading }: KPICardCompactProps) {
+export function KPICardCompact({ label, value, trend, tooltip, loading }: KPICardCompactProps) {
   if (loading) {
     return (
-      <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/50">
+      <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
         <Skeleton variant="text" width={60} height={12} className="mb-2" />
         <Skeleton variant="text" width={80} height={24} />
       </div>
@@ -200,9 +202,9 @@ export function KPICardCompact({ label, value, trend, loading }: KPICardCompactP
   const trendPositive = trend !== undefined && trend >= 0;
   const trendColor = trendPositive ? "text-emerald-400" : "text-red-400";
 
-  return (
-    <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/50 hover:border-slate-600/50 transition-colors">
-      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+  const content = (
+    <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 hover:border-slate-600/50 transition-colors">
+      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
         {label}
       </p>
       <div className="flex items-center gap-2">
@@ -215,4 +217,16 @@ export function KPICardCompact({ label, value, trend, loading }: KPICardCompactP
       </div>
     </div>
   );
+
+  if (tooltip) {
+    return (
+      <Tooltip content={tooltip} position="top">
+        <div className="cursor-help">{content}</div>
+      </Tooltip>
+    );
+  }
+
+  return content;
 }
+
+export default KPICard;
