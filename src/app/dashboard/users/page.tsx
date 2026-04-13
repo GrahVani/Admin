@@ -3,19 +3,24 @@
 import React, { useState, useMemo } from "react";
 import { useAdminUsers, useAdminUserDetail } from "@/hooks/queries/useAdminUsers";
 import { usePlans, useSubscriptions } from "@/hooks/queries/useSubscriptions";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useUserTrends } from "@/hooks/queries/useDashboardTrends";
+import { useActionMutation, useDeleteMutation } from "@/hooks/useMutationWithToast";
 import { adminApiFetch, adminApiFetchCSV } from "@/lib/api";
 import { 
   Search, ChevronDown, X, Shield, Ban, CheckCircle, CreditCard, 
-  MailCheck, RefreshCw, Users, TrendingUp, Clock, Filter, 
+  MailCheck, RefreshCw, Users, TrendingUp, TrendingDown, Clock, Filter, 
   Download, MoreHorizontal, Edit, Trash2, Eye, Crown, 
   AlertCircle, Calendar, MapPin, Phone, Activity, 
-  ChevronLeft, ChevronRight, Check, XCircle
+  ChevronLeft, ChevronRight, Check, XCircle, UserCheck,
+  HelpCircle, Info
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Modal } from "@/components/ui/Modal";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { Button } from "@/components/ui/Button";
 import { format, formatDistanceToNow } from "date-fns";
 
 // Types
@@ -35,64 +40,112 @@ interface User {
   location?: string;
 }
 
-// Statistics Cards
+// Dynamic Statistics Cards with Real Trends
 function StatsCards({ users }: { users: User[] }) {
+  const { total, active, verified, pending, isLoading } = useUserTrends(7);
+
   const stats = useMemo(() => {
-    const total = users.length;
-    const active = users.filter(u => u.status === "active").length;
-    const pending = users.filter(u => u.status === "pending_verification").length;
-    const verified = users.filter(u => u.isVerified).length;
-    const suspended = users.filter(u => u.status === "suspended").length;
-    
+    const computedTotal = users.length;
+    const computedActive = users.filter(u => u.status === "active").length;
+    const computedPending = users.filter(u => u.status === "pending_verification").length;
+    const computedVerified = users.filter(u => u.isVerified).length;
+    const computedSuspended = users.filter(u => u.status === "suspended").length;
+
     return [
-      { label: "Total Astrologers", value: total, icon: Users, color: "blue", trend: "+12%" },
-      { label: "Active", value: active, icon: CheckCircle, color: "green", trend: "+5%" },
-      { label: "Pending Verification", value: pending, icon: AlertCircle, color: "amber" },
-      { label: "Verified", value: verified, icon: MailCheck, color: "purple", trend: "+8%" },
-      { label: "Suspended", value: suspended, icon: Ban, color: "rose" },
+      { 
+        label: "Total Astrologers", 
+        value: computedTotal, 
+        icon: Users, 
+        color: "blue", 
+        trend: total,
+        tooltip: "Total registered astrologers on the platform"
+      },
+      { 
+        label: "Active", 
+        value: computedActive, 
+        icon: CheckCircle, 
+        color: "green", 
+        trend: active,
+        tooltip: "Astrologers with active status"
+      },
+      { 
+        label: "Pending Verification", 
+        value: computedPending, 
+        icon: AlertCircle, 
+        color: "amber",
+        trend: pending,
+        tooltip: "Astrologers awaiting email verification"
+      },
+      { 
+        label: "Verified", 
+        value: computedVerified, 
+        icon: MailCheck, 
+        color: "purple", 
+        trend: verified,
+        tooltip: "Astrologers with verified email addresses"
+      },
+      { 
+        label: "Suspended", 
+        value: computedSuspended, 
+        icon: Ban, 
+        color: "rose",
+        tooltip: "Temporarily suspended accounts"
+      },
     ];
-  }, [users]);
+  }, [users, total, active, pending, verified]);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       {stats.map((stat, i) => (
-        <motion.div 
-          key={stat.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05 }}
-          className="glass-card p-4"
-        >
-          <div className="flex items-start justify-between">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              stat.color === "blue" ? "bg-blue-500/10 text-blue-400" :
-              stat.color === "green" ? "bg-emerald-500/10 text-emerald-400" :
-              stat.color === "amber" ? "bg-amber-500/10 text-amber-400" :
-              stat.color === "purple" ? "bg-violet-500/10 text-violet-400" :
-              "bg-rose-500/10 text-rose-400"
-            }`}>
-              <stat.icon className="w-5 h-5" />
+        <Tooltip key={stat.label} content={stat.tooltip} position="top">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="glass-card p-4 cursor-help h-full hover:border-slate-600/50 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${
+                stat.color === "blue" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                stat.color === "green" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                stat.color === "amber" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                stat.color === "purple" ? "bg-violet-500/10 text-violet-400 border-violet-500/20" :
+                "bg-rose-500/10 text-rose-400 border-rose-500/20"
+              }`}>
+                <stat.icon className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-xl font-bold text-slate-100">{stat.value}</p>
+                  {!isLoading && stat.trend && (
+                    <span className={`text-xs font-medium ${
+                      stat.trend.trendDirection === "up" ? "text-emerald-400" :
+                      stat.trend.trendDirection === "down" ? "text-rose-400" :
+                      "text-slate-400"
+                    }`}>
+                      {stat.trend.trend > 0 && stat.trend.trendDirection === "up" ? "+" : ""}
+                      {stat.trend.trendDirection !== "neutral" ? `${stat.trend.trend}%` : "—"}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 truncate">{stat.label}</p>
+              </div>
             </div>
-            {stat.trend && (
-              <span className="text-xs text-emerald-400 font-medium">{stat.trend}</span>
-            )}
-          </div>
-          <p className="text-2xl font-bold text-slate-100 mt-3">{stat.value}</p>
-          <p className="text-xs text-slate-500">{stat.label}</p>
-        </motion.div>
+          </motion.div>
+        </Tooltip>
       ))}
     </div>
   );
 }
 
-// Assign Subscription Modal
+// Assign Subscription Modal with Error Handling
 function AssignSubscriptionModal({ userId, userName, onClose }: { userId: string; userName: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [planId, setPlanId] = useState("");
   const [duration, setDuration] = useState(30);
   const { data: plans } = usePlans();
 
-  const mutation = useMutation({
+  const mutation = useActionMutation("Assign Subscription", "User", {
     mutationFn: (data: any) => adminApiFetch("/api/v1/admin/subscriptions/assign", { 
       method: "POST", 
       body: JSON.stringify(data) 
@@ -100,6 +153,7 @@ function AssignSubscriptionModal({ userId, userName, onClose }: { userId: string
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ["admin-users"] }); 
       qc.invalidateQueries({ queryKey: ["admin-user", userId] });
+      qc.invalidateQueries({ queryKey: ["user-trends"] });
       onClose(); 
     },
   });
@@ -151,24 +205,25 @@ function AssignSubscriptionModal({ userId, userName, onClose }: { userId: string
           </div>
         </div>
 
-        <div className="p-3 rounded-lg bg-slate-800/50 text-xs text-slate-400">
-          <p>⚡ This will immediately activate the subscription for {duration} days.</p>
+        <div className="p-3 rounded-lg bg-slate-800/50 text-xs text-slate-400 flex items-start gap-2">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <p>This will immediately activate the subscription for {duration} days.</p>
         </div>
 
-        <button
+        <Button
           onClick={() => mutation.mutate({ userId, planId, durationDays: duration })}
           disabled={!planId || mutation.isPending}
-          className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 font-bold flex items-center justify-center gap-2 transition-colors"
+          isLoading={mutation.isPending}
+          className="w-full"
         >
-          {mutation.isPending && <RefreshCw className="w-4 h-4 animate-spin" />}
           {mutation.isPending ? "Assigning..." : "Confirm Assignment"}
-        </button>
+        </Button>
       </div>
     </Modal>
   );
 }
 
-// User Detail Drawer
+// User Detail Drawer with Improved UX
 function UserDetailDrawer({ userId, onClose }: { userId: string; onClose: () => void }) {
   const { data: user, isLoading, refetch } = useAdminUserDetail(userId);
   const { data: subscriptions } = useSubscriptions({ limit: 100 });
@@ -178,7 +233,7 @@ function UserDetailDrawer({ userId, onClose }: { userId: string; onClose: () => 
 
   const userSubscription = subscriptions?.subscriptions?.find((s: any) => s.userId === userId);
 
-  const updateMutation = useMutation({
+  const updateMutation = useActionMutation("Update User", "User", {
     mutationFn: (body: Record<string, unknown>) =>
       adminApiFetch(`/api/v1/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => {
@@ -188,8 +243,10 @@ function UserDetailDrawer({ userId, onClose }: { userId: string; onClose: () => 
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => adminApiFetch(`/api/v1/admin/users/${userId}`, { method: "DELETE" }),
+  const deleteMutation = useDeleteMutation("User", {
+    mutationFn: async (_: void) => {
+      return adminApiFetch(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       onClose();
@@ -229,16 +286,20 @@ function UserDetailDrawer({ userId, onClose }: { userId: string; onClose: () => 
                 <div className="flex items-center gap-2 mt-2">
                   <StatusBadge status={user.status} />
                   {user.isVerified && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                      <CheckCircle className="w-3 h-3" /> Verified
-                    </span>
+                    <Tooltip content="Email verified" position="bottom">
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full cursor-help">
+                        <CheckCircle className="w-3 h-3" /> Verified
+                      </span>
+                    </Tooltip>
                   )}
                 </div>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400">
-              <X className="w-5 h-5" />
-            </button>
+            <Tooltip content="Close" position="bottom">
+              <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
           </div>
 
           {/* Tabs */}
@@ -264,29 +325,37 @@ function UserDetailDrawer({ userId, onClose }: { userId: string; onClose: () => 
             <>
               {/* Quick Info Grid */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
-                  <p className="text-xs text-slate-500 mb-1">Tenant ID</p>
-                  <p className="text-sm font-mono text-slate-300 truncate">{user.tenantId}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
-                  <p className="text-xs text-slate-500 mb-1">Joined</p>
-                  <p className="text-sm text-slate-300">{format(new Date(user.createdAt), "MMM d, yyyy")}</p>
-                </div>
-                {user.phone && (
-                  <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
-                    <p className="text-xs text-slate-500 mb-1">Phone</p>
-                    <p className="text-sm text-slate-300 flex items-center gap-1">
-                      <Phone className="w-3 h-3" /> {user.phone}
-                    </p>
+                <Tooltip content="Unique tenant identifier" position="top">
+                  <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Tenant ID</p>
+                    <p className="text-sm font-mono text-slate-300 truncate">{user.tenantId}</p>
                   </div>
+                </Tooltip>
+                <Tooltip content="Account creation date" position="top">
+                  <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 cursor-help">
+                    <p className="text-xs text-slate-500 mb-1">Joined</p>
+                    <p className="text-sm text-slate-300">{format(new Date(user.createdAt), "MMM d, yyyy")}</p>
+                  </div>
+                </Tooltip>
+                {user.phone && (
+                  <Tooltip content="Primary phone number" position="top">
+                    <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 cursor-help">
+                      <p className="text-xs text-slate-500 mb-1">Phone</p>
+                      <p className="text-sm text-slate-300 flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> {user.phone}
+                      </p>
+                    </div>
+                  </Tooltip>
                 )}
                 {user.location && (
-                  <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
-                    <p className="text-xs text-slate-500 mb-1">Location</p>
-                    <p className="text-sm text-slate-300 flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> {user.location}
-                    </p>
-                  </div>
+                  <Tooltip content="User location" position="top">
+                    <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 cursor-help">
+                      <p className="text-xs text-slate-500 mb-1">Location</p>
+                      <p className="text-sm text-slate-300 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" /> {user.location}
+                      </p>
+                    </div>
+                  </Tooltip>
                 )}
               </div>
 
@@ -335,60 +404,80 @@ function UserDetailDrawer({ userId, onClose }: { userId: string; onClose: () => 
                 <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Administrative Actions</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {!user.isVerified && (
-                    <button 
-                      onClick={() => updateMutation.mutate({ isVerified: true })}
-                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-sm font-medium transition-colors"
-                    >
-                      <MailCheck className="w-4 h-4" /> Verify Email
-                    </button>
+                    <Tooltip content="Mark email as verified" position="top">
+                      <button 
+                        onClick={() => updateMutation.mutate({ isVerified: true })}
+                        disabled={updateMutation.isPending}
+                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        <MailCheck className="w-4 h-4" /> Verify Email
+                      </button>
+                    </Tooltip>
                   )}
                   {user.status !== "active" ? (
-                    <button 
-                      onClick={() => updateMutation.mutate({ status: "active" })}
-                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-sm font-medium transition-colors"
-                    >
-                      <CheckCircle className="w-4 h-4" /> Activate
-                    </button>
+                    <Tooltip content="Activate user account" position="top">
+                      <button 
+                        onClick={() => updateMutation.mutate({ status: "active" })}
+                        disabled={updateMutation.isPending}
+                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle className="w-4 h-4" /> Activate
+                      </button>
+                    </Tooltip>
                   ) : (
+                    <Tooltip content="Temporarily suspend user" position="top">
+                      <button 
+                        onClick={() => updateMutation.mutate({ status: "suspended" })}
+                        disabled={updateMutation.isPending}
+                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        <Ban className="w-4 h-4" /> Suspend
+                      </button>
+                    </Tooltip>
+                  )}
+                  <Tooltip content="Manage subscription" position="top">
                     <button 
-                      onClick={() => updateMutation.mutate({ status: "suspended" })}
+                      onClick={() => setShowAssignSub(true)}
                       className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-sm font-medium transition-colors"
                     >
-                      <Ban className="w-4 h-4" /> Suspend
+                      <CreditCard className="w-4 h-4" /> Subscription
                     </button>
-                  )}
-                  <button 
-                    onClick={() => setShowAssignSub(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-sm font-medium transition-colors"
-                  >
-                    <CreditCard className="w-4 h-4" /> Subscription
-                  </button>
-                  <button 
-                    onClick={() => updateMutation.mutate({ role: user.role === "admin" ? "user" : "admin" })}
-                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 text-sm font-medium transition-colors"
-                  >
-                    <Shield className="w-4 h-4" /> {user.role === "admin" ? "Remove Admin" : "Make Admin"}
-                  </button>
+                  </Tooltip>
+                  <Tooltip content={user.role === "admin" ? "Remove admin privileges" : "Grant admin privileges"} position="top">
+                    <button 
+                      onClick={() => updateMutation.mutate({ role: user.role === "admin" ? "user" : "admin" })}
+                      disabled={updateMutation.isPending}
+                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      <Shield className="w-4 h-4" /> {user.role === "admin" ? "Remove Admin" : "Make Admin"}
+                    </button>
+                  </Tooltip>
                 </div>
 
-                <button 
-                  onClick={() => {
-                    if (confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
-                      deleteMutation.mutate();
-                    }
-                  }}
-                  disabled={deleteMutation.isPending}
-                  className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" /> Delete Account
-                </button>
+                <Tooltip content="Permanently delete this account" position="top">
+                  <button 
+                    onClick={() => {
+                      if (confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
+                        deleteMutation.mutate(undefined);
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                    className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" /> Delete Account
+                  </button>
+                </Tooltip>
               </div>
             </>
           )}
 
           {activeTab === "activity" && (
             <div className="space-y-4">
-              <p className="text-sm text-slate-500 text-center py-8">Activity log coming soon...</p>
+              <div className="text-center py-8">
+                <Activity className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-500 mb-2">Activity Log</p>
+                <p className="text-xs text-slate-600">User activity tracking will be available in the next update</p>
+              </div>
             </div>
           )}
 
@@ -423,12 +512,9 @@ function UserDetailDrawer({ userId, onClose }: { userId: string; onClose: () => 
               ) : (
                 <div className="text-center py-8">
                   <p className="text-slate-500 mb-4">No subscription history</p>
-                  <button 
-                    onClick={() => setShowAssignSub(true)}
-                    className="px-4 py-2 rounded-lg bg-amber-500 text-slate-900 font-medium"
-                  >
+                  <Button onClick={() => setShowAssignSub(true)}>
                     Assign Subscription
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -454,8 +540,9 @@ export default function AstrologersPage() {
   const [verified, setVerified] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
-  const { data, isLoading } = useAdminUsers({ page, search, role: "user", status });
+  const { data, isLoading, refetch, isFetching } = useAdminUsers({ page, search, role: "user", status });
   const users = data?.users ?? [];
   const pagination = data?.pagination;
 
@@ -469,24 +556,29 @@ export default function AstrologersPage() {
 
   // Export to CSV
   const handleExport = async () => {
-    const csv = [
-      ["Name", "Email", "Status", "Verified", "Joined", "Tenant ID"].join(","),
-      ...filteredUsers.map((u: User) => [
-        u.name || "",
-        u.email,
-        u.status,
-        u.isVerified ? "Yes" : "No",
-        new Date(u.createdAt).toLocaleDateString(),
-        u.tenantId
-      ].join(","))
-    ].join("\n");
-    
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `astrologers-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    a.click();
+    setIsExporting(true);
+    try {
+      const csv = [
+        ["Name", "Email", "Status", "Verified", "Joined", "Tenant ID"].join(","),
+        ...filteredUsers.map((u: User) => [
+          u.name || "",
+          u.email,
+          u.status,
+          u.isVerified ? "Yes" : "No",
+          new Date(u.createdAt).toLocaleDateString(),
+          u.tenantId
+        ].join(","))
+      ].join("\n");
+      
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `astrologers-${format(new Date(), "yyyy-MM-dd")}.csv`;
+      a.click();
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -513,41 +605,59 @@ export default function AstrologersPage() {
         </div>
         
         <div className="flex gap-2">
-          <div className="relative">
-            <select 
-              value={status} 
-              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-              className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 cursor-pointer min-w-[140px]"
-            >
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="pending_verification">Pending</option>
-              <option value="suspended">Suspended</option>
-              <option value="deleted">Deleted</option>
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          </div>
+          <Tooltip content="Filter by account status" position="bottom">
+            <div className="relative">
+              <select 
+                value={status} 
+                onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+                className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 cursor-pointer min-w-[140px]"
+              >
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="pending_verification">Pending</option>
+                <option value="suspended">Suspended</option>
+                <option value="deleted">Deleted</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </div>
+          </Tooltip>
 
-          <div className="relative">
-            <select 
-              value={verified} 
-              onChange={(e) => { setVerified(e.target.value); setPage(1); }}
-              className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 cursor-pointer min-w-[140px]"
-            >
-              <option value="all">All Users</option>
-              <option value="verified">Verified Only</option>
-              <option value="unverified">Unverified Only</option>
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          </div>
+          <Tooltip content="Filter by verification status" position="bottom">
+            <div className="relative">
+              <select 
+                value={verified} 
+                onChange={(e) => { setVerified(e.target.value); setPage(1); }}
+                className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-sm text-slate-200 focus:outline-none focus:border-amber-500/50 cursor-pointer min-w-[140px]"
+              >
+                <option value="all">All Users</option>
+                <option value="verified">Verified Only</option>
+                <option value="unverified">Unverified Only</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </div>
+          </Tooltip>
 
-          <button 
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700 hover:bg-slate-700 text-sm text-slate-300 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+          <Tooltip content="Export to CSV" position="bottom">
+            <Button
+              onClick={handleExport}
+              isLoading={isExporting}
+              variant="secondary"
+              leftIcon={Download}
+            >
+              Export
+            </Button>
+          </Tooltip>
+
+          <Tooltip content="Refresh data" position="bottom">
+            <Button
+              variant="ghost"
+              onClick={() => refetch()}
+              isLoading={isFetching}
+              leftIcon={RefreshCw}
+            >
+              Refresh
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -587,9 +697,11 @@ export default function AstrologersPage() {
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-sm font-bold text-amber-400 border border-amber-500/20">
-                          {(user.name || user.email)[0].toUpperCase()}
-                        </div>
+                        <Tooltip content={user.email} position="top">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-sm font-bold text-amber-400 border border-amber-500/20 cursor-help">
+                            {(user.name || user.email)[0].toUpperCase()}
+                          </div>
+                        </Tooltip>
                         <div>
                           <p className="font-medium text-slate-200">{user.name || "—"}</p>
                           <p className="text-xs text-slate-500">{user.email}</p>
@@ -601,25 +713,31 @@ export default function AstrologersPage() {
                     </td>
                     <td className="px-4 py-3">
                       {user.isVerified ? (
-                        <span className="flex items-center gap-1 text-xs text-emerald-400">
-                          <CheckCircle className="w-3.5 h-3.5" /> Verified
-                        </span>
+                        <Tooltip content="Email verified" position="top">
+                          <span className="flex items-center gap-1 text-xs text-emerald-400 cursor-help">
+                            <CheckCircle className="w-3.5 h-3.5" /> Verified
+                          </span>
+                        </Tooltip>
                       ) : (
-                        <span className="flex items-center gap-1 text-xs text-slate-500">
-                          <XCircle className="w-3.5 h-3.5" /> Unverified
-                        </span>
+                        <Tooltip content="Email not verified" position="top">
+                          <span className="flex items-center gap-1 text-xs text-slate-500 cursor-help">
+                            <XCircle className="w-3.5 h-3.5" /> Unverified
+                          </span>
+                        </Tooltip>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-400">
                       {format(new Date(user.createdAt), "MMM d, yyyy")}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button 
-                        onClick={() => setSelectedUserId(user.id)}
-                        className="text-sm text-amber-400 hover:text-amber-300 font-medium"
-                      >
-                        Manage →
-                      </button>
+                      <Tooltip content="Manage user" position="left">
+                        <button 
+                          onClick={() => setSelectedUserId(user.id)}
+                          className="text-sm text-amber-400 hover:text-amber-300 font-medium"
+                        >
+                          Manage →
+                        </button>
+                      </Tooltip>
                     </td>
                   </tr>
                 ))
@@ -635,23 +753,27 @@ export default function AstrologersPage() {
               Showing {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={pagination.page === 1}
-                className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+              <Tooltip content="Previous page" position="top">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={pagination.page === 1}
+                  className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </Tooltip>
               <span className="text-sm text-slate-400">
                 Page {pagination.page} of {pagination.totalPages}
               </span>
-              <button
-                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-                disabled={pagination.page === pagination.totalPages}
-                className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <Tooltip content="Next page" position="top">
+                <button
+                  onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                  disabled={pagination.page === pagination.totalPages}
+                  className="p-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-400"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </Tooltip>
             </div>
           </div>
         )}

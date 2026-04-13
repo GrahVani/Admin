@@ -52,6 +52,11 @@ const SECTION_LABELS: Record<string, string> = {
   operations: "OPERATIONS",
 };
 
+interface AdminSidebarProps {
+  collapsed?: boolean;
+  onCollapseChange?: (collapsed: boolean) => void;
+}
+
 function SectionHeader({ section }: { section: string }) {
   const label = SECTION_LABELS[section];
   if (!label) return null;
@@ -202,22 +207,37 @@ function NavItemComponent({
   );
 }
 
-export default function AdminSidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+export default function AdminSidebar({ 
+  collapsed: controlledCollapsed, 
+  onCollapseChange 
+}: AdminSidebarProps = {}) {
+  // Internal state for uncontrolled mode
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { data: navItems = [], isLoading } = useNavigation();
+
+  // Use controlled or internal state
+  const isControlled = controlledCollapsed !== undefined;
+  const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
 
   useEffect(() => {
     setMounted(true);
     const saved = localStorage.getItem("sidebar-collapsed");
-    if (saved) setCollapsed(saved === "true");
-  }, []);
+    if (saved && !isControlled) setInternalCollapsed(saved === "true");
+  }, [isControlled]);
 
   useEffect(() => {
-    if (mounted) {
-      localStorage.setItem("sidebar-collapsed", String(collapsed));
+    if (mounted && !isControlled) {
+      localStorage.setItem("sidebar-collapsed", String(internalCollapsed));
     }
-  }, [collapsed, mounted]);
+  }, [internalCollapsed, mounted, isControlled]);
+
+  const handleCollapseChange = (newCollapsed: boolean) => {
+    if (!isControlled) {
+      setInternalCollapsed(newCollapsed);
+    }
+    onCollapseChange?.(newCollapsed);
+  };
 
   // Separate items: no-section (top) and with-section (grouped)
   const { topItems, sectionedItems } = useMemo(() => {
@@ -240,19 +260,19 @@ export default function AdminSidebar() {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 flex flex-col z-40 transition-all duration-300 ${
-        collapsed ? "w-16" : "w-64"
+      className={`fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 flex flex-col z-40 transition-all duration-300 ease-out ${
+        collapsed ? "w-[72px]" : "w-64"
       }`}
     >
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-slate-800 shrink-0">
+      <div className="h-14 flex items-center px-3 border-b border-slate-800 shrink-0">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
           <Sparkles className="w-5 h-5 text-slate-900" />
         </div>
         {!collapsed && (
-          <div className="ml-3">
-            <h1 className="text-base font-bold text-slate-100">Grahvani</h1>
-            <p className="text-[10px] font-semibold text-amber-400 tracking-wider">SUPER ADMIN</p>
+          <div className="ml-3 overflow-hidden">
+            <h1 className="text-base font-bold text-slate-100 whitespace-nowrap">Grahvani</h1>
+            <p className="text-[10px] font-semibold text-amber-400 tracking-wider whitespace-nowrap">SUPER ADMIN</p>
           </div>
         )}
       </div>
@@ -303,7 +323,7 @@ export default function AdminSidebar() {
       <div className="border-t border-slate-800 p-2 shrink-0">
         <Tooltip content={collapsed ? "Expand" : "Collapse"} position="top">
           <button
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={() => handleCollapseChange(!collapsed)}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors"
           >
             {collapsed ? (

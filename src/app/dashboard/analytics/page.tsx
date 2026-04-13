@@ -9,16 +9,17 @@ import {
   CreditCard, PieChart, Calendar, Download, Filter, Activity,
   DollarSign, UserCheck, RefreshCw, ArrowUpRight, ArrowDownRight,
   Clock, Target, Zap, ChevronDown, UserPlus, UserMinus, Crown,
-  Wallet, Repeat, ArrowRight, TrendingUp as GrowthIcon
+  Wallet, Repeat, ArrowRight, TrendingUp as GrowthIcon,
+  Info, HelpCircle, Lightbulb, MousePointer
 } from "lucide-react";
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
   BarChart, Bar, PieChart as RePieChart, Pie, Cell, LineChart, Line,
   ComposedChart, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from "recharts";
 
 import { KPICard } from "@/components/ui/KPICard";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { Tooltip, TooltipContent, TooltipIndicator, FieldLabel } from "@/components/ui/Tooltip";
 import { Button } from "@/components/ui/Button";
 import { PageTransition, StaggerContainer, StaggerItem } from "@/components/layout/PageTransition";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -42,6 +43,38 @@ const CHART_COLORS = {
 const PIE_COLORS = Object.values(CHART_COLORS);
 
 type ViewType = "overview" | "users" | "revenue" | "retention";
+
+// Enhanced view tabs with tooltips
+const VIEW_TABS = [
+  { 
+    id: "overview" as ViewType, 
+    label: "Overview", 
+    icon: PieChart, 
+    description: "Platform-wide summary metrics",
+    tooltip: "High-level view of all key performance indicators across the platform"
+  },
+  { 
+    id: "users" as ViewType, 
+    label: "Users", 
+    icon: Users, 
+    description: "User growth & demographics",
+    tooltip: "Detailed analysis of user acquisition, retention, and engagement patterns"
+  },
+  { 
+    id: "revenue" as ViewType, 
+    label: "Revenue", 
+    icon: DollarSign, 
+    description: "Financial performance metrics",
+    tooltip: "Revenue breakdown, MRR, ARPU, and financial health indicators"
+  },
+  { 
+    id: "retention" as ViewType, 
+    label: "Retention", 
+    icon: Target, 
+    description: "Churn & loyalty metrics",
+    tooltip: "Customer retention rates, churn analysis, and cohort behavior"
+  },
+];
 
 interface AnalyticsData {
   summary: {
@@ -104,23 +137,46 @@ interface AnalyticsData {
   };
 }
 
-// Tab configuration
-const VIEW_TABS = [
-  { id: "overview" as ViewType, label: "Overview", icon: PieChart, description: "Platform-wide summary" },
-  { id: "users" as ViewType, label: "Users", icon: Users, description: "User growth & demographics" },
-  { id: "revenue" as ViewType, label: "Revenue", icon: DollarSign, description: "Financial performance" },
-  { id: "retention" as ViewType, label: "Retention", icon: Target, description: "Churn & loyalty metrics" },
-];
+// Real-time indicator component
+function RealtimeIndicator({ lastUpdated, isFetching }: { lastUpdated: Date; isFetching: boolean }) {
+  const [now, setNow] = useState(new Date());
+  
+  React.useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const timeAgo = formatDistanceToNow(lastUpdated, { addSuffix: true });
+  const isStale = now.getTime() - lastUpdated.getTime() > 5 * 60 * 1000;
+
+  return (
+    <Tooltip 
+      content={`Last updated: ${lastUpdated.toLocaleTimeString()}. Data refreshes every 60 seconds.`}
+      position="bottom"
+      variant="info"
+    >
+      <div className={`flex items-center gap-2 text-xs cursor-help ${isStale ? "text-amber-400" : "text-slate-500"}`}>
+        {isFetching ? (
+          <RefreshCw className="w-3 h-3 animate-spin" />
+        ) : (
+          <div className={`w-2 h-2 rounded-full ${isStale ? "bg-amber-400" : "bg-emerald-400"} ${isFetching ? "animate-pulse" : ""}`} />
+        )}
+        <span>{isFetching ? "Updating..." : timeAgo}</span>
+      </div>
+    </Tooltip>
+  );
+}
 
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<7 | 30 | 90>(30);
   const [activeView, setActiveView] = useState<ViewType>("overview");
   const [exporting, setExporting] = useState(false);
 
-  const { data: analytics, isLoading, refetch } = useQuery({
+  const { data: analytics, isLoading, refetch, dataUpdatedAt, isFetching } = useQuery({
     queryKey: ["analytics", period],
     queryFn: () => adminApiFetch<{ success: boolean; data: AnalyticsData }>(`/api/v1/admin/analytics?period=${period}`),
     select: (r): AnalyticsData | undefined => r?.data,
+    refetchInterval: 60000,
   });
 
   const { data: realtime } = useQuery({
@@ -178,7 +234,6 @@ export default function AnalyticsPage() {
     }));
   }, [breakdown?.byStatus]);
 
-  // Revenue breakdown by time
   const revenueByTime = useMemo(() => {
     if (!chartData.length) return [];
     return chartData.map((d: any) => ({
@@ -188,7 +243,6 @@ export default function AnalyticsPage() {
     }));
   }, [chartData]);
 
-  // User growth data
   const userGrowthData = useMemo(() => {
     if (!chartData.length) return [];
     return chartData.map((d: any) => ({
@@ -198,16 +252,15 @@ export default function AnalyticsPage() {
     }));
   }, [chartData]);
 
-  // Retention cohort data - calculated from actual retention rate
   const retentionData = useMemo(() => {
     const baseRetention = analytics?.summary?.retentionRate || 100;
     return [
-      { month: "Month 1", retention: 100 },
-      { month: "Month 2", retention: Math.round(baseRetention * 0.95) },
-      { month: "Month 3", retention: Math.round(baseRetention * 0.90) },
-      { month: "Month 4", retention: Math.round(baseRetention * 0.85) },
-      { month: "Month 5", retention: Math.round(baseRetention * 0.80) },
-      { month: "Month 6", retention: Math.round(baseRetention * 0.75) },
+      { month: "Month 1", retention: 100, tooltip: "Initial cohort retention" },
+      { month: "Month 2", retention: Math.round(baseRetention * 0.95), tooltip: "95% of initial cohort" },
+      { month: "Month 3", retention: Math.round(baseRetention * 0.90), tooltip: "90% of initial cohort" },
+      { month: "Month 4", retention: Math.round(baseRetention * 0.85), tooltip: "85% of initial cohort" },
+      { month: "Month 5", retention: Math.round(baseRetention * 0.80), tooltip: "80% of initial cohort" },
+      { month: "Month 6", retention: Math.round(baseRetention * 0.75), tooltip: "75% of initial cohort" },
     ];
   }, [analytics?.summary?.retentionRate]);
 
@@ -228,7 +281,7 @@ export default function AnalyticsPage() {
     }
   };
 
-  // KPI Cards configuration
+  // KPI Cards configuration with enhanced tooltips
   const mainKPIs = [
     {
       label: "Total Revenue",
@@ -239,6 +292,7 @@ export default function AnalyticsPage() {
       trendData: chartData.map((d: any) => d.revenue),
       color: "accent" as const,
       description: "Lifetime revenue",
+      tooltip: "Total revenue generated since platform launch. Includes all subscriptions, one-time payments, and add-ons.",
     },
     {
       label: "Total Users",
@@ -249,6 +303,7 @@ export default function AnalyticsPage() {
       trendData: chartData.map((d: any) => d.newUsers),
       color: "purple" as const,
       description: "All platform users",
+      tooltip: "Total registered astrologers including active, pending, and suspended accounts.",
     },
     {
       label: "Active Subscriptions",
@@ -259,6 +314,7 @@ export default function AnalyticsPage() {
       trendData: chartData.map((d: any) => d.newSubscriptions),
       color: "success" as const,
       description: "Paying customers",
+      tooltip: "Currently active paying subscriptions. These users have full platform access.",
     },
     {
       label: "ARPU",
@@ -269,17 +325,45 @@ export default function AnalyticsPage() {
       trendData: chartData.map((d: any) => d.revenue / Math.max(d.newUsers, 1)),
       color: "info" as const,
       description: "Avg revenue per user",
+      tooltip: "Average Revenue Per User. Calculated as total revenue divided by total users. Industry benchmark is ₹500-1000.",
     },
   ];
 
   const healthKPIs = [
-    { label: "Retention Rate", value: `${summary?.retentionRate || 0}%`, icon: UserCheck, color: "success" as const, trend: summary?.retentionRate || 0 > 80 ? 2 : -2 },
-    { label: "Churn Rate", value: `${summary?.churnRate || 0}%`, icon: TrendingDown, color: summary?.churnRate || 0 > 10 ? "danger" : "warning" as const, trend: summary?.churnRate || 0 > 10 ? -3 : 2 },
-    { label: "Active Now", value: realtime?.activeNow || 0, icon: Activity, color: "cyan" as const, trend: realtime?.activeNow > 10 ? 5 : -2 },
-    { label: "Today's Revenue", value: `₹${realtime?.revenueToday || 0}`, icon: Zap, color: "warning" as const, trend: realtime?.revenueToday > 1000 ? 8 : 2 },
+    { 
+      label: "Retention Rate", 
+      value: `${summary?.retentionRate || 0}%`, 
+      icon: UserCheck, 
+      color: "success" as const, 
+      trend: summary?.retentionRate || 0 > 80 ? 2 : -2,
+      tooltip: "Percentage of users retained over time. Above 80% is excellent, below 60% needs attention."
+    },
+    { 
+      label: "Churn Rate", 
+      value: `${summary?.churnRate || 0}%`, 
+      icon: TrendingDown, 
+      color: summary?.churnRate || 0 > 10 ? "danger" : "warning" as const, 
+      trend: summary?.churnRate || 0 > 10 ? -3 : 2,
+      tooltip: "Percentage of users who cancelled. Below 5% is excellent, above 10% is concerning."
+    },
+    { 
+      label: "Active Now", 
+      value: realtime?.activeNow || 0, 
+      icon: Activity, 
+      color: "cyan" as const, 
+      trend: realtime?.activeNow > 10 ? 5 : -2,
+      tooltip: "Users currently active on the platform. Updates every 30 seconds."
+    },
+    { 
+      label: "Today's Revenue", 
+      value: `₹${realtime?.revenueToday || 0}`, 
+      icon: Zap, 
+      color: "warning" as const, 
+      trend: realtime?.revenueToday > 1000 ? 8 : 2,
+      tooltip: "Revenue generated today so far. Resets at midnight UTC."
+    },
   ];
 
-  // Render different content based on active view
   const renderContent = () => {
     switch (activeView) {
       case "users":
@@ -298,75 +382,108 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-amber-400" />
-            Analytics
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-amber-400" />
+              Analytics
+            </h1>
+            <Tooltip 
+              content="Comprehensive platform analytics. Data updates every 60 seconds."
+              variant="info"
+            >
+              <TooltipIndicator variant="info" />
+            </Tooltip>
+          </div>
           <p className="text-sm text-slate-400 mt-0.5">
             {VIEW_TABS.find(t => t.id === activeView)?.description}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex p-1 bg-slate-800/50 border border-slate-700 rounded-lg">
-            {[7, 30, 90].map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p as 7 | 30 | 90)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  period === p
-                    ? "bg-amber-500 text-slate-900"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {p}D
-              </button>
-            ))}
-          </div>
-
-          <div className="relative group">
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              isLoading={exporting}
-              rightIcon={ChevronDown}
-            >
-              Export
-            </Button>
-            <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-slate-800 border border-slate-700 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              {["full", "users", "subscriptions", "revenue"].map((type) => (
+          <Tooltip content="Select time period for analysis. Changes affect all charts and metrics." position="bottom">
+            <div className="flex p-1 bg-slate-800/50 border border-slate-700 rounded-lg">
+              {[7, 30, 90].map((p) => (
                 <button
-                  key={type}
-                  onClick={() => handleExport(type)}
-                  className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:text-white hover:bg-slate-700/50 transition-colors capitalize"
+                  key={p}
+                  onClick={() => setPeriod(p as 7 | 30 | 90)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    period === p
+                      ? "bg-amber-500 text-slate-900"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
                 >
-                  {type} Report
+                  {p}D
                 </button>
               ))}
             </div>
-          </div>
+          </Tooltip>
 
-          <Button variant="ghost" size="sm" onClick={() => refetch()} leftIcon={RefreshCw}>
-            Refresh
-          </Button>
+          <Tooltip content="Export detailed reports in CSV format" position="bottom">
+            <div className="relative group">
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                isLoading={exporting}
+                rightIcon={ChevronDown}
+              >
+                Export
+              </Button>
+              <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-slate-800 border border-slate-700 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                {["full", "users", "subscriptions", "revenue"].map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => handleExport(type)}
+                    className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:text-white hover:bg-slate-700/50 transition-colors capitalize"
+                  >
+                    {type} Report
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Tooltip>
+
+          <Tooltip content="Refresh all analytics data" position="bottom">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => refetch()} 
+              leftIcon={RefreshCw}
+              isLoading={isFetching}
+            >
+              Refresh
+            </Button>
+          </Tooltip>
+
+          {dataUpdatedAt && (
+            <RealtimeIndicator 
+              lastUpdated={new Date(dataUpdatedAt)} 
+              isFetching={isFetching} 
+            />
+          )}
         </div>
       </div>
 
-      {/* View Tabs */}
+      {/* View Tabs with Enhanced Tooltips */}
       <div className="flex p-1 bg-slate-800/30 border border-slate-700/50 rounded-xl overflow-x-auto">
         {VIEW_TABS.map((view) => (
-          <button
+          <Tooltip 
             key={view.id}
-            onClick={() => setActiveView(view.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-              activeView === view.id
-                ? "bg-amber-500 text-slate-900"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
+            content={view.tooltip}
+            position="bottom"
+            variant="info"
           >
-            <view.icon className="w-4 h-4" />
-            {view.label}
-          </button>
+            <button
+              onClick={() => setActiveView(view.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                activeView === view.id
+                  ? "bg-amber-500 text-slate-900"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <view.icon className="w-4 h-4" />
+              {view.label}
+            </button>
+          </Tooltip>
         ))}
       </div>
 
@@ -386,59 +503,86 @@ export default function AnalyticsPage() {
   );
 }
 
-// ============ VIEW COMPONENTS ============
-
+// Overview View with Enhanced Tooltips
 function OverviewView({ data, chartData, planData, statusData, healthKPIs, mainKPIs, isLoading, realtime }: any) {
   return (
     <div className="space-y-5">
-      {/* KPI Cards */}
+      {/* KPI Cards - Tighter grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
         </div>
       ) : (
-        <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {mainKPIs.map((kpi: any, i: number) => (
-            <StaggerItem key={i}><KPICard {...kpi} /></StaggerItem>
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="h-full min-w-0"
+            >
+              <KPICard {...kpi} />
+            </motion.div>
           ))}
-        </StaggerContainer>
+        </div>
       )}
 
-      {/* Health Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Health Metrics - Tighter gaps */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {healthKPIs.map((stat: any, i: number) => (
-          <motion.div
-            key={i}
-            className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/50"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.05 }}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-500">{stat.label}</span>
-              {stat.trend !== 0 && (
-                <span className={`text-xs ${stat.trend > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {stat.trend > 0 ? "+" : ""}{stat.trend}%
-                </span>
-              )}
-            </div>
-            <p className="text-xl font-bold text-slate-100 mt-1">{stat.value}</p>
-          </motion.div>
+          <Tooltip key={i} content={stat.tooltip} position="top" variant="insight">
+            <motion.div
+              className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 hover:border-slate-600/50 transition-all cursor-help h-full"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + i * 0.05 }}
+              whileHover={{ y: -2 }}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stat.color === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : stat.color === 'danger' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : stat.color === 'cyan' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                  <stat.icon className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-lg font-bold text-slate-100">{stat.value}</p>
+                    {stat.trend !== 0 && (
+                      <span className={`text-xs font-medium ${stat.trend > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {stat.trend > 0 ? "+" : ""}{stat.trend}%
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 truncate">{stat.label}</p>
+                </div>
+              </div>
+            </motion.div>
+          </Tooltip>
         ))}
       </div>
 
-      {/* Main Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      {/* Main Charts - Tighter gaps */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
         <motion.div className="xl:col-span-2 glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <div className="flex items-center justify-between mb-5">
-            <div>
+            <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold text-slate-100">Growth Analytics</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Users, subscriptions & revenue over time</p>
+              <Tooltip 
+                content="Tracks user acquisition, subscriptions, and cumulative revenue over time. Use this to identify growth patterns and seasonality."
+                variant="info"
+              >
+                <TooltipIndicator variant="info" />
+              </Tooltip>
             </div>
             <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" />Revenue</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-violet-400" />Users</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" />Subscriptions</span>
+              <Tooltip content="Daily revenue in INR" position="top">
+                <span className="flex items-center gap-1.5 cursor-help"><span className="w-2 h-2 rounded-full bg-amber-400" />Revenue</span>
+              </Tooltip>
+              <Tooltip content="New user registrations" position="top">
+                <span className="flex items-center gap-1.5 cursor-help"><span className="w-2 h-2 rounded-full bg-violet-400" />Users</span>
+              </Tooltip>
+              <Tooltip content="New paying subscriptions" position="top">
+                <span className="flex items-center gap-1.5 cursor-help"><span className="w-2 h-2 rounded-full bg-emerald-400" />Subscriptions</span>
+              </Tooltip>
             </div>
           </div>
 
@@ -450,7 +594,10 @@ function OverviewView({ data, chartData, planData, statusData, healthKPIs, mainK
                   <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis yAxisId="left" tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v}`} />
-                  <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} labelStyle={{ color: "#e2e8f0" }} />
+                  <RechartsTooltip 
+                    contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} 
+                    labelStyle={{ color: "#e2e8f0" }}
+                  />
                   <Bar yAxisId="left" dataKey="newUsers" fill={CHART_COLORS.purple} radius={[4, 4, 0, 0]} maxBarSize={40} />
                   <Bar yAxisId="left" dataKey="newSubscriptions" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} maxBarSize={40} />
                   <Line yAxisId="right" type="monotone" dataKey="cumulativeRevenue" stroke={CHART_COLORS.gold} strokeWidth={2} dot={false} />
@@ -466,8 +613,8 @@ function OverviewView({ data, chartData, planData, statusData, healthKPIs, mainK
         </div>
       </div>
 
-      {/* Bottom Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Bottom Section - Tighter gaps */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <TopPlans data={data?.topPerformers?.plans} isLoading={isLoading} />
         <EngagementMetrics data={data?.engagement} isLoading={isLoading} />
         <RecentAstrologers data={data?.topPerformers?.astrologers} isLoading={isLoading} />
@@ -476,27 +623,56 @@ function OverviewView({ data, chartData, planData, statusData, healthKPIs, mainK
   );
 }
 
+// Users View
 function UsersView({ data, chartData, isLoading }: any) {
   return (
     <div className="space-y-5">
-      {/* User KPIs */}
+      {/* User KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {isLoading ? (
-          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
+          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)
         ) : (
           <>
-            <KPICard label="Total Users" value={data?.summary?.totalUsers?.toLocaleString()} icon={Users} color="purple" trend={data?.trends?.userGrowth} description="All registered users" />
-            <KPICard label="New Users (Period)" value={data?.summary?.newUsersThisPeriod?.toLocaleString()} icon={UserPlus} color="success" trend={data?.trends?.userGrowth} description="Recent signups" />
-            <KPICard label="Active Users" value={data?.summary?.activeUsers?.toLocaleString()} icon={Activity} color="info" trend={data?.trends?.userGrowth} description="Active in last 24h" />
-            <KPICard label="Conversion Rate" value={`${((data?.summary?.activeSubscriptions / data?.summary?.totalUsers) * 100 || 0).toFixed(1)}%`} icon={Target} color="accent" trend={data?.trends?.subscriptionGrowth} description="Users to Subscribers" />
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} className="h-full">
+              <Tooltip content="Total registered users including all statuses" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="Total Users" value={data?.summary?.totalUsers?.toLocaleString()} icon={Users} color="purple" trend={data?.trends?.userGrowth} description="All registered users" />
+                </div>
+              </Tooltip>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="h-full">
+              <Tooltip content="New users acquired during the selected period" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="New Users (Period)" value={data?.summary?.newUsersThisPeriod?.toLocaleString()} icon={UserPlus} color="success" trend={data?.trends?.userGrowth} description="Recent signups" />
+                </div>
+              </Tooltip>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="h-full">
+              <Tooltip content="Users active in the last 24 hours" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="Active Users" value={data?.summary?.activeUsers?.toLocaleString()} icon={Activity} color="info" trend={data?.trends?.userGrowth} description="Active in last 24h" />
+                </div>
+              </Tooltip>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="h-full">
+              <Tooltip content="Percentage of users who converted to paid subscriptions" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="Conversion Rate" value={`${((data?.summary?.activeSubscriptions / data?.summary?.totalUsers) * 100 || 0).toFixed(1)}%`} icon={Target} color="accent" trend={data?.trends?.subscriptionGrowth} description="Users to Subscribers" />
+                </div>
+              </Tooltip>
+            </motion.div>
           </>
         )}
       </div>
 
-      {/* User Growth Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <motion.div className="lg:col-span-2 glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-base font-semibold text-slate-100 mb-4">User Growth Trend</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-base font-semibold text-slate-100">User Growth Trend</h2>
+            <Tooltip content="Month-over-month user acquisition trend" variant="info">
+              <TooltipIndicator variant="info" />
+            </Tooltip>
+          </div>
           <div className="h-[300px]">
             {isLoading ? <Skeleton className="h-full rounded-xl" /> : (
               <ResponsiveContainer width="100%" height="100%">
@@ -510,7 +686,7 @@ function UsersView({ data, chartData, isLoading }: any) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                   <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} />
+                  <RechartsTooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} />
                   <Area type="monotone" dataKey="newUsers" stroke={CHART_COLORS.purple} strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
                   <Line type="monotone" dataKey="cumulative" stroke={CHART_COLORS.info} strokeWidth={2} dot={false} />
                 </AreaChart>
@@ -520,12 +696,17 @@ function UsersView({ data, chartData, isLoading }: any) {
         </motion.div>
 
         <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <h2 className="text-base font-semibold text-slate-100 mb-4">User Insights</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-base font-semibold text-slate-100">User Insights</h2>
+            <Tooltip content="Key user metrics and performance indicators" variant="insight">
+              <TooltipIndicator variant="insight" />
+            </Tooltip>
+          </div>
           <div className="space-y-4">
-            <InsightCard icon={UserCheck} label="Daily Active Users" value={data?.summary?.activeUsers || 0} color="success" />
-            <InsightCard icon={Crown} label="Premium Users" value={data?.summary?.activeSubscriptions || 0} color="gold" />
-            <InsightCard icon={UserMinus} label="Inactive Users" value={(data?.summary?.totalUsers - data?.summary?.activeUsers) || 0} color="danger" />
-            <InsightCard icon={GrowthIcon} label="Growth Rate" value={`+${data?.trends?.userGrowth || 0}%`} color="info" />
+            <InsightCard icon={UserCheck} label="Daily Active Users" value={data?.summary?.activeUsers || 0} color="success" tooltip="Users who logged in today" />
+            <InsightCard icon={Crown} label="Premium Users" value={data?.summary?.activeSubscriptions || 0} color="gold" tooltip="Users with paid subscriptions" />
+            <InsightCard icon={UserMinus} label="Inactive Users" value={(data?.summary?.totalUsers - data?.summary?.activeUsers) || 0} color="danger" tooltip="Users who haven't logged in recently" />
+            <InsightCard icon={GrowthIcon} label="Growth Rate" value={`+${data?.trends?.userGrowth || 0}%`} color="info" tooltip="User growth rate vs previous period" />
           </div>
         </motion.div>
       </div>
@@ -533,35 +714,63 @@ function UsersView({ data, chartData, isLoading }: any) {
   );
 }
 
+// Revenue View
 function RevenueView({ data, chartData, planData, isLoading }: any) {
   const totalRevenue = data?.summary?.totalRevenue || 0;
   const revenueThisPeriod = data?.summary?.revenueThisPeriod || 0;
   const arpu = data?.summary?.averageRevenuePerUser || 0;
   
-  // Use topPerformers.plans for actual revenue data (not planData which only has counts)
   const plansWithRevenue = data?.topPerformers?.plans || [];
   const totalPlanRevenue = plansWithRevenue.reduce((sum: number, p: any) => sum + (p.revenue || 0), 0);
 
   return (
     <div className="space-y-5">
-      {/* Revenue KPIs */}
+      {/* Revenue KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {isLoading ? (
-          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
+          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)
         ) : (
           <>
-            <KPICard label="Total Revenue" value={`₹${totalRevenue.toLocaleString()}`} icon={DollarSign} color="accent" trend={data?.trends?.revenueGrowth} description="All time earnings" />
-            <KPICard label="Revenue (Period)" value={`₹${revenueThisPeriod.toLocaleString()}`} icon={Wallet} color="warning" trend={data?.trends?.revenueGrowth} description={`Last ${data?.breakdown?.daily?.length || 30} days`} />
-            <KPICard label="ARPU" value={`₹${Math.round(arpu)}`} icon={Target} color="info" trend={data?.trends?.revenueGrowth} description="Per user average" />
-            <KPICard label="MRR Estimate" value={`₹${Math.round(data?.summary?.activeSubscriptions * (totalRevenue / Math.max(data?.summary?.totalSubscriptions, 1))).toLocaleString()}`} icon={TrendingUp} color="success" trend={data?.trends?.revenueGrowth} description="Monthly recurring" />
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }} className="h-full">
+              <Tooltip content="Total revenue generated since platform launch" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="Total Revenue" value={`₹${totalRevenue.toLocaleString()}`} icon={DollarSign} color="accent" trend={data?.trends?.revenueGrowth} description="All time earnings" />
+                </div>
+              </Tooltip>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="h-full">
+              <Tooltip content="Revenue generated during the selected period" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="Revenue (Period)" value={`₹${revenueThisPeriod.toLocaleString()}`} icon={Wallet} color="warning" trend={data?.trends?.revenueGrowth} description={`Selected period`} />
+                </div>
+              </Tooltip>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="h-full">
+              <Tooltip content="Average Revenue Per User - total revenue divided by user count" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="ARPU" value={`₹${Math.round(arpu)}`} icon={Target} color="info" trend={data?.trends?.revenueGrowth} description="Per user average" />
+                </div>
+              </Tooltip>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="h-full">
+              <Tooltip content="Monthly Recurring Revenue estimate based on active subscriptions" position="top">
+                <div className="cursor-help h-full">
+                  <KPICard label="MRR Estimate" value={`₹${Math.round(data?.summary?.activeSubscriptions * (totalRevenue / Math.max(data?.summary?.totalSubscriptions, 1))).toLocaleString()}`} icon={TrendingUp} color="success" trend={data?.trends?.revenueGrowth} description="Monthly recurring" />
+                </div>
+              </Tooltip>
+            </motion.div>
           </>
         )}
       </div>
 
-      {/* Revenue Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <motion.div className="lg:col-span-2 glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-base font-semibold text-slate-100 mb-4">Revenue Trend</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-base font-semibold text-slate-100">Revenue Trend</h2>
+            <Tooltip content="Daily revenue and cumulative revenue over time" variant="info">
+              <TooltipIndicator variant="info" />
+            </Tooltip>
+          </div>
           <div className="h-[300px]">
             {isLoading ? <Skeleton className="h-full rounded-xl" /> : (
               <ResponsiveContainer width="100%" height="100%">
@@ -575,7 +784,7 @@ function RevenueView({ data, chartData, planData, isLoading }: any) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                   <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v}`} />
-                  <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} formatter={(v: any) => `₹${v.toLocaleString()}`} />
+                  <RechartsTooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} formatter={(v: any) => `₹${v.toLocaleString()}`} />
                   <Area type="monotone" dataKey="revenue" stroke={CHART_COLORS.gold} strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
                   <Line type="monotone" dataKey="cumulative" stroke={CHART_COLORS.orange} strokeWidth={2} dot={false} />
                 </AreaChart>
@@ -585,17 +794,24 @@ function RevenueView({ data, chartData, planData, isLoading }: any) {
         </motion.div>
 
         <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <h2 className="text-base font-semibold text-slate-100 mb-4">Revenue by Plan</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-base font-semibold text-slate-100">Revenue by Plan</h2>
+            <Tooltip content="Revenue breakdown by subscription tier" variant="insight">
+              <TooltipIndicator variant="insight" />
+            </Tooltip>
+          </div>
           <div className="space-y-3">
             {plansWithRevenue.length > 0 ? plansWithRevenue.map((plan: any, i: number) => (
-              <div key={plan.name} className="flex items-center justify-between p-3 rounded-lg bg-slate-800/30">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                  <span className="text-sm text-slate-300">{plan.name}</span>
-                  <span className="text-xs text-slate-500">({plan.subscribers})</span>
+              <Tooltip key={plan.name} content={`${plan.name}: ${plan.subscribers} subscribers generating ₹${plan.revenue?.toLocaleString()}`} position="left">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/30 cursor-help">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="text-sm text-slate-300">{plan.name}</span>
+                    <span className="text-xs text-slate-500">({plan.subscribers})</span>
+                  </div>
+                  <span className="text-sm font-semibold text-amber-400">₹{plan.revenue?.toLocaleString()}</span>
                 </div>
-                <span className="text-sm font-semibold text-amber-400">₹{plan.revenue?.toLocaleString()}</span>
-              </div>
+              </Tooltip>
             )) : (
               <EmptyState title="No plan data" description="Revenue by plan will appear here" className="py-8" />
             )}
@@ -609,36 +825,55 @@ function RevenueView({ data, chartData, planData, isLoading }: any) {
         </motion.div>
       </div>
 
-      {/* Top Performing Plans */}
       <TopPlans data={plansWithRevenue} isLoading={isLoading} fullWidth />
     </div>
   );
 }
 
+// Retention View
 function RetentionView({ data, retentionData, statusData, isLoading }: any) {
   const retentionRate = data?.summary?.retentionRate || 0;
   const churnRate = data?.summary?.churnRate || 0;
 
   return (
     <div className="space-y-5">
-      {/* Retention KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {isLoading ? (
           [...Array(4)].map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
         ) : (
           <>
-            <KPICard label="Retention Rate" value={`${retentionRate}%`} icon={UserCheck} color="success" trend={retentionRate > 80 ? 2 : -2} description="Users retained" />
-            <KPICard label="Churn Rate" value={`${churnRate}%`} icon={UserMinus} color={churnRate > 10 ? "danger" : "warning"} trend={churnRate > 10 ? -3 : 2} description="Users lost" />
-            <KPICard label="Avg Session" value={`${data?.engagement?.averageSessionTime || 0}m`} icon={Clock} color="info" trend={data?.engagement?.averageSessionTime > 15 ? 5 : -2} description="Time on platform" />
-            <KPICard label="Return Rate" value={`${data?.engagement?.returnRate || 0}%`} icon={Repeat} color="purple" trend={data?.engagement?.returnRate > 50 ? 5 : -3} description="Returning visitors" />
+            <Tooltip content="Percentage of users retained over a given period. Above 80% is excellent." position="top">
+              <div className="cursor-help">
+                <KPICard label="Retention Rate" value={`${retentionRate}%`} icon={UserCheck} color="success" trend={retentionRate > 80 ? 2 : -2} description="Users retained" />
+              </div>
+            </Tooltip>
+            <Tooltip content="Percentage of users who cancelled. Below 5% is excellent." position="top">
+              <div className="cursor-help">
+                <KPICard label="Churn Rate" value={`${churnRate}%`} icon={UserMinus} color={churnRate > 10 ? "danger" : "warning"} trend={churnRate > 10 ? -3 : 2} description="Users lost" />
+              </div>
+            </Tooltip>
+            <Tooltip content="Average time users spend per session" position="top">
+              <div className="cursor-help">
+                <KPICard label="Avg Session" value={`${data?.engagement?.averageSessionTime || 0}m`} icon={Clock} color="info" trend={data?.engagement?.averageSessionTime > 15 ? 5 : -2} description="Time on platform" />
+              </div>
+            </Tooltip>
+            <Tooltip content="Percentage of users who return after first visit" position="top">
+              <div className="cursor-help">
+                <KPICard label="Return Rate" value={`${data?.engagement?.returnRate || 0}%`} icon={Repeat} color="purple" trend={data?.engagement?.returnRate > 50 ? 5 : -3} description="Returning visitors" />
+              </div>
+            </Tooltip>
           </>
         )}
       </div>
 
-      {/* Retention Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-base font-semibold text-slate-100 mb-4">Retention Cohort Analysis</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-base font-semibold text-slate-100">Retention Cohort Analysis</h2>
+            <Tooltip content="Shows how user retention changes over time. Higher retention = better product-market fit." variant="info">
+              <TooltipIndicator variant="info" />
+            </Tooltip>
+          </div>
           <div className="h-[280px]">
             {isLoading ? <Skeleton className="h-full rounded-xl" /> : (
               <ResponsiveContainer width="100%" height="100%">
@@ -646,7 +881,7 @@ function RetentionView({ data, retentionData, statusData, isLoading }: any) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                   <XAxis dataKey="month" tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                  <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} formatter={(v: any) => `${v}%`} />
+                  <RechartsTooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} formatter={(v: any) => `${v}%`} />
                   <Line type="monotone" dataKey="retention" stroke={CHART_COLORS.success} strokeWidth={3} dot={{ fill: CHART_COLORS.success }} />
                 </LineChart>
               </ResponsiveContainer>
@@ -655,7 +890,12 @@ function RetentionView({ data, retentionData, statusData, isLoading }: any) {
         </motion.div>
 
         <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <h2 className="text-base font-semibold text-slate-100 mb-4">Churn Analysis</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-base font-semibold text-slate-100">Churn Analysis</h2>
+            <Tooltip content="Breakdown of active vs churned subscriptions" variant="warning">
+              <TooltipIndicator variant="warning" />
+            </Tooltip>
+          </div>
           <div className="space-y-4">
             <div className="p-4 rounded-xl bg-slate-800/30">
               <div className="flex items-center justify-between mb-2">
@@ -678,46 +918,62 @@ function RetentionView({ data, retentionData, statusData, isLoading }: any) {
             </div>
 
             <div className="grid grid-cols-2 gap-3 mt-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-                <p className="text-2xl font-bold text-emerald-400">{retentionRate}%</p>
-                <p className="text-xs text-slate-500">Healthy</p>
-              </div>
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center">
-                <p className="text-2xl font-bold text-rose-400">{churnRate}%</p>
-                <p className="text-xs text-slate-500">At Risk</p>
-              </div>
+              <Tooltip content="Healthy retention rate - users staying subscribed" position="top">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center cursor-help">
+                  <p className="text-2xl font-bold text-emerald-400">{retentionRate}%</p>
+                  <p className="text-xs text-slate-500">Healthy</p>
+                </div>
+              </Tooltip>
+              <Tooltip content="At-risk users who have churned" position="top">
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center cursor-help">
+                  <p className="text-2xl font-bold text-rose-400">{churnRate}%</p>
+                  <p className="text-xs text-slate-500">At Risk</p>
+                </div>
+              </Tooltip>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Engagement Metrics */}
       <EngagementMetrics data={data?.engagement} isLoading={isLoading} />
     </div>
   );
 }
 
-// ============ SUB COMPONENTS ============
+// ============ SUB COMPONENTS WITH TOOLTIPS ============
 
 function PlanDistribution({ data, isLoading }: any) {
   return (
     <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-      <h2 className="text-sm font-semibold text-slate-100 mb-4">Plan Distribution</h2>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-100">Plan Distribution</h2>
+          <Tooltip content="Distribution of active subscribers across different plans" variant="info">
+            <TooltipIndicator variant="info" />
+          </Tooltip>
+        </div>
+      </div>
       {data.length > 0 ? (
         <div className="space-y-3">
           {data.map((plan: any) => (
-            <div key={plan.name}>
-              <div className="flex items-center justify-between text-sm mb-1">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: plan.color }} />
-                  <span className="text-slate-300 capitalize">{plan.name}</span>
+            <Tooltip 
+              key={plan.name} 
+              content={`${plan.name} (${plan.tier}): ${plan.value} subscribers (${plan.percentage}%)`}
+              position="left"
+            >
+              <div className="group cursor-help">
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: plan.color }} />
+                    <span className="text-slate-300 capitalize">{plan.name}</span>
+                  </div>
+                  <span className="text-slate-400 text-xs">{plan.percentage}%</span>
                 </div>
-                <span className="text-slate-400 text-xs">{plan.percentage}%</span>
+                <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
+                  <motion.div className="h-full rounded-full" style={{ backgroundColor: plan.color }} initial={{ width: 0 }} animate={{ width: `${plan.percentage}%` }} transition={{ duration: 0.8 }} />
+                </div>
               </div>
-              <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
-                <motion.div className="h-full rounded-full" style={{ backgroundColor: plan.color }} initial={{ width: 0 }} animate={{ width: `${plan.percentage}%` }} transition={{ duration: 0.8 }} />
-              </div>
-            </div>
+            </Tooltip>
           ))}
         </div>
       ) : <EmptyState title="No plans" description="Create plans to see distribution" className="py-8" />}
@@ -728,7 +984,12 @@ function PlanDistribution({ data, isLoading }: any) {
 function StatusBreakdown({ data, isLoading }: any) {
   return (
     <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-      <h2 className="text-sm font-semibold text-slate-100 mb-4">Status Breakdown</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-sm font-semibold text-slate-100">Status Breakdown</h2>
+        <Tooltip content="Subscription status distribution" variant="info">
+          <TooltipIndicator variant="info" />
+        </Tooltip>
+      </div>
       <div className="h-[180px]">
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -736,17 +997,19 @@ function StatusBreakdown({ data, isLoading }: any) {
               <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" stroke="none">
                 {data.map((entry: any, index: number) => <Cell key={`cell-${index}`} fill={entry.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} />
+              <RechartsTooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "8px" }} />
             </RePieChart>
           </ResponsiveContainer>
         ) : <EmptyState title="No data" description="Status data unavailable" className="py-8" />}
       </div>
       <div className="flex flex-wrap justify-center gap-3 mt-2">
         {data.map((s: any) => (
-          <div key={s.name} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-            <span className="text-xs text-slate-400 capitalize">{s.name}</span>
-          </div>
+          <Tooltip key={s.name} content={`${s.name}: ${s.value} subscriptions`} position="bottom">
+            <div className="flex items-center gap-1.5 cursor-help">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+              <span className="text-xs text-slate-400 capitalize">{s.name}</span>
+            </div>
+          </Tooltip>
         ))}
       </div>
     </motion.div>
@@ -756,20 +1019,27 @@ function StatusBreakdown({ data, isLoading }: any) {
 function TopPlans({ data, isLoading, fullWidth }: any) {
   return (
     <motion.div className={`glass-card p-5 ${fullWidth ? "lg:col-span-3" : ""}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-      <h2 className="text-sm font-semibold text-slate-100 mb-4">Top Performing Plans</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-sm font-semibold text-slate-100">Top Performing Plans</h2>
+        <Tooltip content="Plans ranked by revenue generation" variant="insight">
+          <TooltipIndicator variant="insight" />
+        </Tooltip>
+      </div>
       {data?.length > 0 ? (
         <div className={`grid gap-3 ${fullWidth ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4" : ""}`}>
           {data.slice(0, fullWidth ? 8 : 5).map((plan: any, i: number) => (
-            <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-800/30">
-              <div>
-                <p className="text-sm font-medium text-slate-200">{plan.name}</p>
-                <p className="text-xs text-slate-500">{plan.subscribers} subscribers</p>
+            <Tooltip key={i} content={`${plan.name}: ${plan.subscribers} subscribers • ₹${plan.revenue?.toLocaleString()} revenue`} position="top">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/30 cursor-help">
+                <div>
+                  <p className="text-sm font-medium text-slate-200">{plan.name}</p>
+                  <p className="text-xs text-slate-500">{plan.subscribers} subscribers</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-emerald-400">₹{plan.revenue.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500">Revenue</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold text-emerald-400">₹{plan.revenue.toLocaleString()}</p>
-                <p className="text-xs text-slate-500">Revenue</p>
-              </div>
-            </div>
+            </Tooltip>
           ))}
         </div>
       ) : <EmptyState title="No data" description="Plan performance data unavailable" className="py-8" />}
@@ -779,26 +1049,33 @@ function TopPlans({ data, isLoading, fullWidth }: any) {
 
 function EngagementMetrics({ data, isLoading }: any) {
   const metrics = [
-    { label: "Avg Session Time", value: `${data?.averageSessionTime || 0} min`, icon: Clock },
-    { label: "Pages per Session", value: data?.pagesPerSession || 0, icon: Activity },
-    { label: "Bounce Rate", value: `${data?.bounceRate || 0}%`, icon: TrendingDown },
-    { label: "Return Rate", value: `${data?.returnRate || 0}%`, icon: RefreshCw },
+    { label: "Avg Session Time", value: `${data?.averageSessionTime || 0} min`, icon: Clock, tooltip: "Average time users spend per session" },
+    { label: "Pages per Session", value: data?.pagesPerSession || 0, icon: Activity, tooltip: "Average number of pages viewed per session" },
+    { label: "Bounce Rate", value: `${data?.bounceRate || 0}%`, icon: TrendingDown, tooltip: "Percentage of users who leave after viewing one page" },
+    { label: "Return Rate", value: `${data?.returnRate || 0}%`, icon: RefreshCw, tooltip: "Percentage of users who return after first visit" },
   ];
 
   return (
     <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-      <h2 className="text-sm font-semibold text-slate-100 mb-4">Engagement Metrics</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-sm font-semibold text-slate-100">Engagement Metrics</h2>
+        <Tooltip content="User engagement and interaction metrics" variant="insight">
+          <TooltipIndicator variant="insight" />
+        </Tooltip>
+      </div>
       <div className="space-y-4">
         {metrics.map((metric, i) => (
-          <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-800/30">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center">
-                <metric.icon className="w-4 h-4 text-slate-400" />
+          <Tooltip key={i} content={metric.tooltip} position="right">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/30 cursor-help">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center">
+                  <metric.icon className="w-4 h-4 text-slate-400" />
+                </div>
+                <span className="text-sm text-slate-300">{metric.label}</span>
               </div>
-              <span className="text-sm text-slate-300">{metric.label}</span>
+              <span className="text-sm font-semibold text-slate-100">{metric.value}</span>
             </div>
-            <span className="text-sm font-semibold text-slate-100">{metric.value}</span>
-          </div>
+          </Tooltip>
         ))}
       </div>
     </motion.div>
@@ -808,19 +1085,26 @@ function EngagementMetrics({ data, isLoading }: any) {
 function RecentAstrologers({ data, isLoading }: any) {
   return (
     <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-      <h2 className="text-sm font-semibold text-slate-100 mb-4">New Astrologers</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-sm font-semibold text-slate-100">New Astrologers</h2>
+        <Tooltip content="Recently registered astrologers" variant="info">
+          <TooltipIndicator variant="info" />
+        </Tooltip>
+      </div>
       {data?.length > 0 ? (
         <div className="space-y-2">
           {data.slice(0, 6).map((user: any) => (
-            <div key={user.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-800/30 transition-colors">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center text-xs font-bold text-amber-400">
-                {(user.name || "?").charAt(0).toUpperCase()}
+            <Tooltip key={user.id} content={`Joined ${new Date(user.joinedAt).toLocaleDateString()}`} position="right">
+              <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-800/30 transition-colors cursor-help">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center text-xs font-bold text-amber-400">
+                  {(user.name || "?").charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200 truncate">{user.name}</p>
+                  <p className="text-xs text-slate-500">Joined {formatDistanceToNow(new Date(user.joinedAt), { addSuffix: true })}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-200 truncate">{user.name}</p>
-                <p className="text-xs text-slate-500">Joined {formatDistanceToNow(new Date(user.joinedAt), { addSuffix: true })}</p>
-              </div>
-            </div>
+            </Tooltip>
           ))}
         </div>
       ) : <EmptyState title="No recent users" description="New registrations will appear here" className="py-8" />}
@@ -828,7 +1112,7 @@ function RecentAstrologers({ data, isLoading }: any) {
   );
 }
 
-function InsightCard({ icon: Icon, label, value, color }: any) {
+function InsightCard({ icon: Icon, label, value, color, tooltip }: any) {
   const colorClasses: Record<string, string> = {
     success: "text-emerald-400 bg-emerald-500/10",
     danger: "text-rose-400 bg-rose-500/10",
@@ -838,7 +1122,7 @@ function InsightCard({ icon: Icon, label, value, color }: any) {
     purple: "text-violet-400 bg-violet-500/10",
   };
 
-  return (
+  const content = (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30">
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorClasses[color] || colorClasses.info}`}>
         <Icon className="w-5 h-5" />
@@ -849,4 +1133,14 @@ function InsightCard({ icon: Icon, label, value, color }: any) {
       </div>
     </div>
   );
+
+  if (tooltip) {
+    return (
+      <Tooltip content={tooltip} position="right">
+        <div className="cursor-help">{content}</div>
+      </Tooltip>
+    );
+  }
+
+  return content;
 }

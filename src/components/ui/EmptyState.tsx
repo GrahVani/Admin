@@ -12,6 +12,7 @@ interface EmptyStateProps {
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  action?: React.ReactNode;
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
   className?: string;
@@ -23,6 +24,7 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  action,
   secondaryActionLabel,
   onSecondaryAction,
   className = "",
@@ -52,7 +54,7 @@ export function EmptyState({
         </p>
       )}
 
-      {(actionLabel || secondaryActionLabel) && (
+      {(actionLabel || secondaryActionLabel || action) && (
         <div className="flex items-center gap-3">
           {secondaryActionLabel && (
             <Button variant="ghost" onClick={onSecondaryAction}>
@@ -62,6 +64,7 @@ export function EmptyState({
           {actionLabel && (
             <Button onClick={onAction}>{actionLabel}</Button>
           )}
+          {action}
         </div>
       )}
     </motion.div>

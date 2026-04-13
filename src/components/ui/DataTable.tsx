@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "./Skeleton";
 import { Checkbox } from "./Checkbox";
 import { Popover, MenuItem, MenuDivider } from "./Popover";
+import { Tooltip } from "./Tooltip";
 import { staggerContainer, staggerItem, fadeInUp } from "@/lib/animations";
 
 type SortDirection = "asc" | "desc" | null;
@@ -134,7 +135,9 @@ export function DataTable<T extends { id: string | number }>({
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-b border-admin-border/50">
           {searchable && (
             <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted" />
+              <Tooltip content="Search records" position="top">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted cursor-help" />
+              </Tooltip>
               <input
                 type="text"
                 value={searchQuery}
@@ -158,18 +161,23 @@ export function DataTable<T extends { id: string | number }>({
                   {selectedIds.length} selected
                 </span>
                 {bulkActions.map((action) => (
-                  <button
+                  <Tooltip 
                     key={action.label}
-                    onClick={() => action.onClick(selectedIds)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      action.variant === "danger"
-                        ? "bg-admin-danger/10 text-admin-danger hover:bg-admin-danger/20"
-                        : "bg-admin-accent/10 text-admin-accent hover:bg-admin-accent/20"
-                    }`}
+                    content={`${action.label} ${selectedIds.length} selected item(s)`}
+                    position="top"
                   >
-                    {action.icon && <action.icon className="w-4 h-4" />}
-                    {action.label}
-                  </button>
+                    <button
+                      onClick={() => action.onClick(selectedIds)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        action.variant === "danger"
+                          ? "bg-admin-danger/10 text-admin-danger hover:bg-admin-danger/20"
+                          : "bg-admin-accent/10 text-admin-accent hover:bg-admin-accent/20"
+                      }`}
+                    >
+                      {action.icon && <action.icon className="w-4 h-4" />}
+                      {action.label}
+                    </button>
+                  </Tooltip>
                 ))}
               </motion.div>
             )}
@@ -184,11 +192,15 @@ export function DataTable<T extends { id: string | number }>({
             <tr className="border-b border-admin-border/50 bg-admin-elevated/30">
               {selectable && (
                 <th className="px-4 py-3 w-12">
-                  <Checkbox
-                    checked={allSelected}
-                    indeterminate={someSelected}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                  />
+                  <Tooltip content="Select all rows" position="top">
+                    <div className="inline-flex">
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={someSelected}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                      />
+                    </div>
+                  </Tooltip>
                 </th>
               )}
               {columns.map((col, idx) => (
@@ -203,17 +215,25 @@ export function DataTable<T extends { id: string | number }>({
                   <div className="flex items-center gap-1">
                     {col.header}
                     {col.sortable && (
-                      <span className="text-admin-text-muted">
-                        {sortColumn === idx ? (
-                          sortDirection === "asc" ? (
-                            <ArrowUp className="w-3 h-3" />
+                      <Tooltip 
+                        content={sortColumn === idx 
+                          ? (sortDirection === "asc" ? "Sorted ascending - Click to sort descending" : "Sorted descending - Click to clear sort")
+                          : "Click to sort ascending"
+                        }
+                        position="top"
+                      >
+                        <span className="text-admin-text-muted cursor-help">
+                          {sortColumn === idx ? (
+                            sortDirection === "asc" ? (
+                              <ArrowUp className="w-3 h-3" />
+                            ) : (
+                              <ArrowDown className="w-3 h-3" />
+                            )
                           ) : (
-                            <ArrowDown className="w-3 h-3" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="w-3 h-3 opacity-30" />
-                        )}
-                      </span>
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </span>
+                      </Tooltip>
                     )}
                   </div>
                 </th>
@@ -290,12 +310,16 @@ export function DataTable<T extends { id: string | number }>({
                         className="px-4 py-4"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Checkbox
-                          checked={selectedIds.includes(String(item.id))}
-                          onChange={(e) =>
-                            handleSelectRow(String(item.id), e.target.checked)
-                          }
-                        />
+                        <Tooltip content="Select this row" position="top">
+                          <div className="inline-flex">
+                            <Checkbox
+                              checked={selectedIds.includes(String(item.id))}
+                              onChange={(e) =>
+                                handleSelectRow(String(item.id), e.target.checked)
+                              }
+                            />
+                          </div>
+                        </Tooltip>
                       </td>
                     )}
                     {columns.map((col, colIdx) => (
@@ -309,37 +333,51 @@ export function DataTable<T extends { id: string | number }>({
                       <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <Popover
                           trigger={
-                            <button className="w-8 h-8 rounded-lg flex items-center justify-center text-admin-text-muted hover:text-admin-text hover:bg-admin-elevated transition-colors">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </button>
+                            <Tooltip content="Open actions menu" position="top">
+                              <button className="w-8 h-8 rounded-lg flex items-center justify-center text-admin-text-muted hover:text-admin-text hover:bg-admin-elevated transition-colors">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </button>
+                            </Tooltip>
                           }
                         >
                           <div className="w-40 p-1 bg-admin-card border border-admin-border rounded-xl shadow-xl">
                             {onView && (
-                              <MenuItem
-                                icon={<Eye className="w-4 h-4" />}
-                                onClick={() => onView(item)}
-                              >
-                                View
-                              </MenuItem>
+                              <Tooltip content="View complete details" position="left">
+                                <div>
+                                  <MenuItem
+                                    icon={<Eye className="w-4 h-4" />}
+                                    onClick={() => onView(item)}
+                                  >
+                                    View
+                                  </MenuItem>
+                                </div>
+                              </Tooltip>
                             )}
                             {onEdit && (
-                              <MenuItem
-                                icon={<Edit className="w-4 h-4" />}
-                                onClick={() => onEdit(item)}
-                              >
-                                Edit
-                              </MenuItem>
+                              <Tooltip content="Edit this record" position="left">
+                                <div>
+                                  <MenuItem
+                                    icon={<Edit className="w-4 h-4" />}
+                                    onClick={() => onEdit(item)}
+                                  >
+                                    Edit
+                                  </MenuItem>
+                                </div>
+                              </Tooltip>
                             )}
                             {(onView || onEdit) && onDelete && <MenuDivider />}
                             {onDelete && (
-                              <MenuItem
-                                icon={<Trash2 className="w-4 h-4" />}
-                                onClick={() => onDelete(item)}
-                                danger
-                              >
-                                Delete
-                              </MenuItem>
+                              <Tooltip content="Permanently delete this record" position="left">
+                                <div>
+                                  <MenuItem
+                                    icon={<Trash2 className="w-4 h-4" />}
+                                    onClick={() => onDelete(item)}
+                                    danger
+                                  >
+                                    Delete
+                                  </MenuItem>
+                                </div>
+                              </Tooltip>
                             )}
                           </div>
                         </Popover>
@@ -370,57 +408,70 @@ export function DataTable<T extends { id: string | number }>({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => pagination.onPageChange(1)}
-              disabled={pagination.page === 1}
-              className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => pagination.onPageChange(Math.max(1, pagination.page - 1))}
-              disabled={pagination.page === 1}
-              className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+            <Tooltip content="Go to first page" position="top">
+              <button
+                onClick={() => pagination.onPageChange(1)}
+                disabled={pagination.page === 1}
+                className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip content="Go to previous page" position="top">
+              <button
+                onClick={() => pagination.onPageChange(Math.max(1, pagination.page - 1))}
+                disabled={pagination.page === 1}
+                className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </Tooltip>
 
             <div className="flex items-center gap-1 px-2">
               {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
                 const pageNum = i + 1;
                 const isActive = pageNum === pagination.page;
                 return (
-                  <button
+                  <Tooltip 
                     key={pageNum}
-                    onClick={() => pagination.onPageChange(pageNum)}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-admin-accent text-admin-deep"
-                        : "text-admin-text-muted hover:text-admin-text hover:bg-admin-elevated"
-                    }`}
+                    content={isActive ? "Current page" : `Go to page ${pageNum}`}
+                    position="top"
                   >
-                    {pageNum}
-                  </button>
+                    <button
+                      onClick={() => pagination.onPageChange(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-admin-accent text-admin-deep"
+                          : "text-admin-text-muted hover:text-admin-text hover:bg-admin-elevated"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  </Tooltip>
                 );
               })}
             </div>
 
-            <button
-              onClick={() =>
-                pagination.onPageChange(Math.min(pagination.totalPages, pagination.page + 1))
-              }
-              disabled={pagination.page === pagination.totalPages}
-              className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => pagination.onPageChange(pagination.totalPages)}
-              disabled={pagination.page === pagination.totalPages}
-              className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronsRight className="w-4 h-4" />
-            </button>
+            <Tooltip content="Go to next page" position="top">
+              <button
+                onClick={() =>
+                  pagination.onPageChange(Math.min(pagination.totalPages, pagination.page + 1))
+                }
+                disabled={pagination.page === pagination.totalPages}
+                className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip content="Go to last page" position="top">
+              <button
+                onClick={() => pagination.onPageChange(pagination.totalPages)}
+                disabled={pagination.page === pagination.totalPages}
+                className="p-2 rounded-lg border border-admin-border hover:bg-admin-elevated text-admin-text-muted hover:text-admin-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}
